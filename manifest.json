@@ -1,0 +1,14 @@
+{
+  "name": "Scribbly — notes that draw themselves",
+  "short_name": "Scribbly",
+  "description": "A hand-drawn notebook that auto-formats your notes and turns arrows into diagrams.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#e8ddc4",
+  "theme_color": "#e04f3d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

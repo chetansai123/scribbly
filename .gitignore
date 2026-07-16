@@ -1,0 +1,18 @@
+# Build/share artifacts
+scribbly.zip
+
+# Local data / backups
+*.backup.json
+scribbly-backup*.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Never commit secrets
+.env
+.env.*
+*.key

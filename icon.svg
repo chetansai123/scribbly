@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#fcf8ee"/>
+  <g fill="none" stroke-width="4" opacity="0.5">
+    <path d="M40 150 H472 M40 230 H472 M40 310 H472 M40 390 H472" stroke="#cfe1f0"/>
+  </g>
+  <path d="M96 40 V472" stroke="#efb1ac" stroke-width="5"/>
+  <text x="140" y="300" font-family="Caveat, Comic Sans MS, cursive" font-size="230" font-weight="700" fill="#e04f3d" transform="rotate(-6 256 256)">S</text>
+  <circle cx="360" cy="360" r="26" fill="#ef9e33"/>
+  <circle cx="410" cy="330" r="18" fill="#2f80d8"/>
+  <circle cx="392" cy="392" r="14" fill="#37a35a"/>
+  <path d="M120 420 Q 180 380 240 415 T 380 405" fill="none" stroke="#8b53c6" stroke-width="9" stroke-linecap="round"/>
+</svg>

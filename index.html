@@ -1,0 +1,905 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scribbly — notes that draw themselves</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e04f3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scribbly">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Gochi+Hand&family=Shadows+Into+Light&display=swap" rel="stylesheet">
+<style>
+/* ======================= THEME TOKENS ======================= */
+:root{
+  /* Notebook (light) — default */
+  --desk:#e8ddc4; --paper:#fcf8ee; --paper2:#fffdf6;
+  --rule:#cfe1f0; --margin:#efb1ac;
+  --ink:#33302a; --muted:#9a927c; --faint:#c9bfa4;
+  --line:#e3d8bd; --line2:#cdbf9c;
+  --red:#e04f3d; --blue:#2f80d8; --green:#37a35a; --purple:#8b53c6; --orange:#ef9e33; --teal:#1fa79c; --pink:#e5589b;
+  --h1:#e04f3d; --h2:#2f80d8; --h3:#8b53c6; --h4:#37a35a; --h5:#ef9e33; --h6:#1fa79c;
+  --accent:#e04f3d; --accent-ink:#fff;
+  --mark:#ffe6a0; --code-bg:#f3ead2; --code-ink:#c0392b; --link:#2f80d8; --quote:#8b53c6;
+  --shadow:0 8px 22px rgba(120,96,50,.20); --shadow-sm:0 3px 10px rgba(120,96,50,.16);
+  --font-hand:'Kalam',system-ui,sans-serif; --font-head:'Caveat',cursive; --font-clean:'Patrick Hand',system-ui,sans-serif;
+}
+[data-theme="blackboard"]{
+  --desk:#171d1a; --paper:#232c27; --paper2:#28322c;
+  --rule:rgba(255,255,255,.045); --margin:rgba(255,150,130,.22);
+  --ink:#eef2ea; --muted:#9db0a2; --faint:#5f7266;
+  --line:#3c4a43; --line2:#51625a;
+  --red:#ff8f7a; --blue:#8fd0ff; --green:#a6e6a0; --purple:#d6b3ff; --orange:#ffcf87; --teal:#7fe3d8; --pink:#ff9ecb;
+  --h1:#ffcf87; --h2:#8fd0ff; --h3:#ff9ecb; --h4:#a6e6a0; --h5:#ffcf87; --h6:#7fe3d8;
+  --accent:#ffcf87; --accent-ink:#232c27;
+  --mark:rgba(255,212,121,.30); --code-bg:#1c231f; --code-ink:#ff9ecb; --link:#8fd0ff; --quote:#d6b3ff;
+  --shadow:0 10px 26px rgba(0,0,0,.45); --shadow-sm:0 3px 10px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; color:var(--ink); font-family:var(--font-hand); font-size:16px;
+  background-color:var(--desk);
+  background-image:
+    radial-gradient(circle at 12% 18%, color-mix(in srgb,var(--red) 22%,transparent), transparent 42%),
+    radial-gradient(circle at 88% 82%, color-mix(in srgb,var(--blue) 20%,transparent), transparent 42%),
+    radial-gradient(circle at 78% 10%, color-mix(in srgb,var(--green) 16%,transparent), transparent 40%),
+    radial-gradient(var(--faint) 1.1px, transparent 1.1px);
+  background-size:auto,auto,auto,24px 24px;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight-color:transparent}
+/* hand-drawn frame helper: uneven radius + slight tilt read as "sketched" */
+.sketch{border:2.5px solid var(--ink); border-radius:255px 14px 235px 14px/14px 235px 14px 255px; background:var(--paper2)}
+.sketch2{border:2.5px solid var(--ink); border-radius:14px 230px 16px 250px/240px 15px 220px 14px}
+
+/* ======================= SHELL ======================= */
+#app{display:flex; height:100vh; overflow:hidden; gap:10px; padding:10px}
+
+/* ---- Sidebar (a taped-up notebook) ---- */
+#sidebar{
+  width:288px; min-width:230px; max-width:440px; flex-shrink:0; display:flex; flex-direction:column;
+  background:var(--paper); border:2.5px solid var(--ink); border-radius:20px 8px 20px 8px/8px 20px 8px 20px;
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.side-head{padding:16px 16px 6px; position:relative}
+.brand{font-family:var(--font-head); font-size:34px; font-weight:700; line-height:.95; color:var(--red);
+  transform:rotate(-2deg); display:inline-block}
+.brand .b2{color:var(--blue)} .brand .b3{color:var(--green)}
+.brand .dot{display:inline-block; width:12px; height:12px; margin-left:1px; border-radius:50%; background:var(--orange);
+  box-shadow:2px 2px 0 var(--pink)}
+.tag{font-family:var(--font-clean); font-size:12.5px; color:var(--muted); margin-top:6px}
+.doodle{position:absolute; opacity:.85; pointer-events:none}
+.side-actions{display:flex; gap:8px; padding:8px 14px 12px}
+.side-actions button{
+  flex:1; padding:9px 6px; font-size:14.5px; background:var(--paper2); color:var(--ink);
+  border:2.5px solid var(--ink); border-radius:200px 12px 200px 12px/12px 200px 12px 200px;
+  display:flex; align-items:center; justify-content:center; gap:5px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+.side-actions button:hover{transform:translate(-1px,-1px) rotate(-1deg); box-shadow:3px 3px 0 var(--accent); color:var(--accent)}
+.side-actions button:active{transform:translate(1px,1px); box-shadow:1px 1px 0 var(--line2)}
+#tree{flex:1; overflow:auto; padding:4px 10px 40px}
+.node{user-select:none}
+.row{display:flex; align-items:center; gap:6px; padding:6px 7px; border-radius:10px; cursor:pointer;
+  position:relative; transition:background .1s,transform .1s; font-size:16px}
+.row:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.row.active{background:color-mix(in srgb,var(--mark) 70%,transparent); box-shadow:inset 3px 0 0 var(--accent); transform:rotate(-.4deg)}
+.row .twist{width:14px; text-align:center; color:var(--muted); font-family:var(--font-clean); font-size:12px; transition:transform .12s}
+.row.open .twist{transform:rotate(90deg)}
+.row .ic{font-size:17px; width:21px; text-align:center}
+.row .nm{flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis}
+.row .acts{display:none; gap:1px}
+.row:hover .acts,.row.active .acts{display:flex}
+.row .acts button{background:none; border:none; padding:2px 4px; font-size:13px; opacity:.65; border-radius:6px}
+.row .acts button:hover{opacity:1; background:var(--paper2)}
+.tree-edit{flex:1; min-width:0; font-family:var(--font-hand); font-size:15.5px; color:var(--ink);
+  background:var(--paper2); border:2px solid var(--accent); border-radius:7px; padding:1px 6px; outline:none}
+.children{margin-left:15px; border-left:2px dotted var(--line2); padding-left:5px}
+.drop-into{outline:2.5px dashed var(--accent); outline-offset:-2px; border-radius:10px}
+.empty-hint{color:var(--muted); font-family:var(--font-clean); font-size:13px; text-align:center; padding:26px 12px; line-height:1.7}
+
+/* ---- Main ---- */
+#main{flex:1; display:flex; flex-direction:column; min-width:0;
+  background:var(--paper); border:2.5px solid var(--ink); border-radius:8px 20px 8px 20px/20px 8px 20px 8px;
+  box-shadow:var(--shadow); overflow:hidden}
+#topbar{display:flex; align-items:center; gap:9px; padding:10px 14px; border-bottom:2.5px dashed var(--line2); flex-wrap:wrap}
+#burger{display:none; background:var(--paper2); border:2.5px solid var(--ink); border-radius:10px; padding:5px 10px; font-size:16px}
+.file-title{font-family:var(--font-head); font-size:28px; font-weight:700; flex:1; min-width:120px; color:var(--ink);
+  overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:none; background:none; outline:none}
+.seg{display:flex; background:var(--paper2); border:2.5px solid var(--ink); border-radius:12px; overflow:hidden}
+.seg button{padding:6px 13px; border:none; background:none; font-size:14px; color:var(--muted); font-family:var(--font-clean)}
+.seg button.on{background:var(--accent); color:var(--accent-ink); font-weight:700}
+.tbtn{padding:7px 12px; background:var(--paper2); color:var(--ink); border:2.5px solid var(--ink);
+  border-radius:200px 12px 200px 12px/12px 200px 12px 200px; font-size:14px; font-family:var(--font-clean);
+  display:flex; align-items:center; gap:6px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+.tbtn:hover{transform:translate(-1px,-1px) rotate(-1deg); box-shadow:3px 3px 0 var(--accent); color:var(--accent)}
+.tbtn:active{transform:translate(1px,1px); box-shadow:1px 1px 0 var(--line2)}
+.icon-btn{padding:7px 10px; background:var(--paper2); color:var(--ink); border:2.5px solid var(--ink); border-radius:11px; font-size:16px; line-height:1; box-shadow:2px 2px 0 var(--line2)}
+.icon-btn:hover{box-shadow:3px 3px 0 var(--accent)}
+
+#work{flex:1; display:flex; min-height:0}
+#editorWrap,#previewWrap{flex:1; min-width:0; height:100%; overflow:auto; position:relative; background:var(--paper)}
+#editorWrap{border-right:2.5px dashed var(--line2);
+  background-image:linear-gradient(var(--margin) 0 0);
+  background-size:2px 100%; background-repeat:no-repeat; background-position:52px 0}
+.pane-label{position:sticky; top:0; z-index:3; font-family:var(--font-clean); font-size:11px; letter-spacing:1px;
+  text-transform:uppercase; color:var(--muted); background:var(--paper); padding:7px 22px 5px 66px; border-bottom:1px dashed var(--line);
+  display:flex; align-items:center; gap:8px}
+#micBtn{margin-left:auto; text-transform:none; letter-spacing:.3px; font-family:var(--font-clean); font-size:13px;
+  padding:4px 12px; background:var(--paper2); color:var(--ink); border:2.5px solid var(--ink);
+  border-radius:200px 10px 200px 10px/10px 200px 10px 200px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+#micBtn:hover{transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--accent); color:var(--accent)}
+#micBtn.rec{background:var(--red); color:#fff; border-color:var(--red); box-shadow:2px 2px 0 rgba(0,0,0,.2); animation:pulse 1.1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+#editor{width:100%; min-height:calc(100% - 32px); border:none; outline:none; resize:none; color:var(--ink);
+  font-family:var(--font-hand); font-size:19px; line-height:32px; padding:8px 26px 140px 66px; tab-size:2;
+  background:repeating-linear-gradient(var(--paper) 0 31px, var(--rule) 31px 32px)}
+[data-font="clean"] #editor{font-family:var(--font-clean)}
+#previewWrap{background-image:radial-gradient(var(--faint) 1px,transparent 1px); background-size:22px 22px}
+#preview{padding:14px 40px 150px 66px; max-width:900px}
+.mode-write #previewWrap{display:none}
+.mode-write #editorWrap{border-right:none}
+.mode-read #editorWrap{display:none}
+
+#status{display:flex; align-items:center; gap:16px; padding:6px 18px; border-top:2.5px dashed var(--line2);
+  font-family:var(--font-clean); font-size:12.5px; color:var(--muted)}
+#status .saved{color:var(--green)} .grow{flex:1}
+
+/* ======================= RENDERED DOC ======================= */
+#preview h1,#preview h2,#preview h3,#preview h4,#preview h5,#preview h6{
+  font-family:var(--font-head); line-height:1.12; margin:.8em 0 .3em; font-weight:700; letter-spacing:.3px}
+#preview h1{font-size:3rem; color:var(--h1); transform:rotate(-1deg); margin-top:.15em;
+  text-shadow:2px 2px 0 color-mix(in srgb,var(--h1) 22%,transparent)}
+#preview h2{font-size:2.2rem; color:var(--h2); text-decoration:underline wavy color-mix(in srgb,var(--h2) 55%,transparent) 2px; text-underline-offset:7px}
+#preview h3{font-size:1.75rem; color:var(--h3)}
+#preview h4{font-size:1.42rem; color:var(--h4)}
+#preview h5{font-size:1.2rem; color:var(--h5)}
+#preview h6{font-size:1.05rem; color:var(--h6)}
+#preview p{margin:.5em 0; line-height:1.75; font-size:1.15rem}
+#preview strong{color:var(--h1); font-weight:700}
+#preview em{color:var(--h3); font-style:italic}
+#preview del{color:var(--muted)}
+#preview a{color:var(--link); text-decoration:underline wavy var(--link) 1px; text-underline-offset:3px}
+#preview mark{background:linear-gradient(105deg,transparent 2%,var(--mark) 2% 98%,transparent 98%); color:inherit; padding:.05em .15em}
+#preview ul,#preview ol{margin:.5em 0; padding-left:1.6em; line-height:1.75; font-size:1.12rem}
+#preview li{margin:.18em 0}
+#preview ol{list-style:none; counter-reset:none}
+#preview ol li{position:relative; padding-left:.2em}
+#preview ol li::before{content:attr(data-n); position:absolute; left:-1.5em; width:1.3em; text-align:right;
+  color:var(--accent); font-family:var(--font-head); font-size:1.2em; font-weight:700}
+#preview ul{list-style:none; padding-left:1.5em}
+#preview ul li{position:relative}
+#preview ul li::before{content:"✦"; position:absolute; left:-1.25em; color:var(--pink); font-size:.95em}
+#preview li.task{list-style:none}
+#preview li.task::before{content:none}
+#preview .cbx{display:inline-flex; width:1.2em; height:1.2em; margin-right:.45em; vertical-align:-3px;
+  border:2.5px solid var(--line2); border-radius:6px 3px 6px 3px; align-items:center; justify-content:center;
+  color:var(--green); font-size:.8em; background:var(--paper2)}
+#preview li.done{color:var(--muted); text-decoration:line-through}
+#preview li.done .cbx{background:var(--green); border-color:var(--green); color:var(--paper)}
+#preview blockquote{margin:.85em 0; padding:.5em 1.1em; border-left:5px solid var(--quote);
+  background:color-mix(in srgb,var(--quote) 9%,var(--paper2)); border-radius:0 14px 14px 0; box-shadow:var(--shadow-sm)}
+#preview blockquote p{margin:.2em 0; font-style:italic}
+#preview code{font-family:'Gochi Hand',monospace; background:var(--code-bg); color:var(--code-ink); padding:.05em .4em; border-radius:6px; font-size:1.02rem}
+#preview pre.cb{background:var(--code-bg); border:2.5px solid var(--ink); border-radius:16px 220px 18px 240px/230px 16px 210px 14px;
+  padding:14px 18px; overflow:auto; margin:.85em 0; box-shadow:var(--shadow-sm)}
+#preview pre.cb code{background:none; padding:0; color:var(--ink); font-size:1rem; line-height:1.6; display:block}
+#preview hr{border:none; height:8px; margin:1.4em 0; background:no-repeat center/100% 8px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='8'%3E%3Cpath d='M1 5 Q 25 1 50 4 T 99 3' fill='none' stroke='%23bbb' stroke-width='2'/%3E%3C/svg%3E")}
+#preview img{max-width:100%; border-radius:12px; border:2.5px solid var(--ink); box-shadow:var(--shadow-sm)}
+#preview table{border-collapse:separate; border-spacing:0; margin:.9em 0; width:100%; border:2.5px solid var(--ink);
+  border-radius:14px; overflow:hidden; font-size:1.02rem; box-shadow:var(--shadow-sm)}
+#preview th,#preview td{padding:9px 13px; border-bottom:1.5px dashed var(--line2); text-align:left}
+#preview th{background:color-mix(in srgb,var(--accent) 16%,var(--paper2)); color:var(--h1); font-family:var(--font-head); font-size:1.3rem}
+#preview tr:last-child td{border-bottom:none}
+#preview .doc-empty{color:var(--muted); font-family:var(--font-clean); text-align:center; padding:70px 20px; font-size:1.1rem}
+/* diagrams */
+#preview .diagram{margin:1em 0; padding:14px; overflow-x:auto; background:var(--paper2);
+  border:2.5px dashed var(--line2); border-radius:18px}
+#preview .diagram svg{display:block; margin:2px auto}
+#preview .diagram svg text{font-family:var(--font-hand); font-size:18px; fill:var(--ink)}
+
+/* ======================= MODALS ======================= */
+.modal-back{position:fixed; inset:0; background:rgba(20,16,10,.55); display:none; align-items:center; justify-content:center; z-index:60; padding:18px}
+.modal-back.on{display:flex}
+.modal{width:min(440px,94vw); max-height:88vh; overflow:auto; background:var(--paper); padding:22px; box-shadow:var(--shadow)}
+.modal h3{font-family:var(--font-head); font-size:30px; margin:0 0 4px; color:var(--accent); transform:rotate(-1deg)}
+.modal .sub{font-family:var(--font-clean); font-size:13px; color:var(--muted); margin-bottom:16px}
+.share-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.share-grid button{display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px; font-family:var(--font-clean);
+  font-size:13.5px; background:var(--paper2); color:var(--ink); border:2.5px solid var(--ink); border-radius:16px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+.share-grid button:hover{transform:translate(-1px,-1px) rotate(-1deg); box-shadow:3px 3px 0 var(--accent)}
+.share-grid button .em{font-size:24px; line-height:1}
+.modal .close{margin-top:16px; width:100%; padding:10px; font-family:var(--font-clean); font-size:14px;
+  background:var(--accent); color:var(--accent-ink); border:2.5px solid var(--ink); border-radius:12px; font-weight:700}
+.modal .rowbtns{display:flex; flex-direction:column; gap:10px; margin-bottom:6px}
+.modal .rowbtns button{padding:12px; text-align:left; font-family:var(--font-clean); font-size:14.5px; background:var(--paper2);
+  color:var(--ink); border:2.5px solid var(--ink); border-radius:14px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+.modal .rowbtns button:hover{transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--accent)}
+.modal .rowbtns small{display:block; color:var(--muted); font-size:12px; margin-top:2px}
+
+/* read-only shared view */
+#sharedView{position:fixed; inset:0; z-index:80; overflow:auto; background:var(--desk);
+  background-image:radial-gradient(var(--faint) 1.1px,transparent 1.1px); background-size:24px 24px; display:none}
+#sharedView.on{display:block}
+#sharedView .sheet{max-width:840px; margin:26px auto; background:var(--paper); border:2.5px solid var(--ink);
+  border-radius:8px 20px 8px 20px/20px 8px 20px 8px; box-shadow:var(--shadow); padding:34px 44px 60px}
+#sharedView .barx{max-width:840px; margin:0 auto 0; display:flex; justify-content:space-between; align-items:center; padding:16px 8px 0}
+#sharedView .barx .n{font-family:var(--font-head); font-size:26px; color:var(--accent)}
+
+#toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(30px); background:var(--ink); color:var(--paper);
+  padding:11px 20px; border-radius:12px; font-family:var(--font-clean); font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:99; box-shadow:var(--shadow)}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+@media(max-width:760px){
+  #app{padding:6px; gap:0}
+  #sidebar{position:fixed; z-index:40; height:calc(100% - 12px); box-shadow:var(--shadow); transform:translateX(-115%); transition:.2s; top:6px; left:6px}
+  #sidebar.open{transform:none}
+  #burger{display:block}
+  #work{flex-direction:column}
+  #editorWrap{border-right:none; border-bottom:2.5px dashed var(--line2)}
+  #scrim{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:39; display:none}
+  #scrim.on{display:block}
+}
+</style>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="brand">Scrib<span class="b2">bl</span><span class="b3">y</span><span class="dot"></span></div>
+      <svg class="doodle" style="top:12px;right:14px" width="46" height="40" viewBox="0 0 46 40">
+        <path d="M6 20 Q 14 6 23 14 T 40 10" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M30 30 l3 -7 l3 7 l7 2 l-7 2 l-3 7 l-3 -7 l-7 -2 z" fill="var(--orange)" opacity=".9"/>
+      </svg>
+      <div class="tag">✎ notes that format &amp; draw themselves</div>
+    </div>
+    <div class="side-actions">
+      <button onclick="startCreate('file')" title="New file at top level">📄 File</button>
+      <button onclick="startCreate('folder')" title="New folder at top level">📁 Folder</button>
+    </div>
+    <div id="tree"></div>
+  </aside>
+  <div id="scrim" onclick="toggleSidebar(false)"></div>
+
+  <div id="main">
+    <div id="topbar">
+      <button id="burger" onclick="toggleSidebar()">☰</button>
+      <input id="fileTitle" class="file-title" placeholder="Untitled" oninput="renameActive(this.value)" spellcheck="false">
+      <div class="seg" id="viewSeg">
+        <button data-mode="split" onclick="setMode('split')">Split</button>
+        <button data-mode="write" onclick="setMode('write')">Write</button>
+        <button data-mode="read" onclick="setMode('read')">Read</button>
+      </div>
+      <button class="tbtn" onclick="toggleFont()" id="fontBtn">✍️ Handwritten</button>
+      <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Theme">🌙</button>
+      <button class="icon-btn" onclick="pickDiagramImage()" title="Screenshot → hand-drawn diagram (AI)">🪄</button>
+      <button class="icon-btn" onclick="openData()" title="Backup / restore">💾</button>
+      <button class="tbtn" onclick="openShare()">📤 Share</button>
+    </div>
+    <div id="work" class="mode-split">
+      <div id="editorWrap">
+        <div class="pane-label">✏️ Your notes — just type
+          <button id="micBtn" onclick="toggleMic()" title="Voice typing — dictates at your cursor">🎤 Speak</button>
+        </div>
+        <textarea id="editor" spellcheck="true" placeholder="Start typing…&#10;&#10;• First line becomes the title&#10;• ALL CAPS or a line ending with : becomes a heading&#10;• - bullet   1. numbered   - [ ] checkbox&#10;• **bold**  *italic*  ==highlight==  > quote&#10;• Draw a flow:  Start -> Validate -> Save -> Done"></textarea>
+      </div>
+      <div id="previewWrap">
+        <div class="pane-label">✨ Live formatted</div>
+        <div id="preview"></div>
+      </div>
+    </div>
+    <div id="status">
+      <span id="saveState" class="saved">● saved</span>
+      <span class="grow"></span>
+      <span id="counts">0 words · 0 chars</span>
+    </div>
+  </div>
+</div>
+
+<!-- Share modal -->
+<div class="modal-back" id="shareModal" onclick="if(event.target===this)closeModal('shareModal')">
+  <div class="modal sketch">
+    <h3>Share this note</h3>
+    <div class="sub">Send it anywhere — it keeps its formatting.</div>
+    <div class="share-grid" id="shareGrid"></div>
+    <button class="close" onclick="closeModal('shareModal')">Done</button>
+  </div>
+</div>
+
+<!-- Data modal -->
+<div class="modal-back" id="dataModal" onclick="if(event.target===this)closeModal('dataModal')">
+  <div class="modal sketch2">
+    <h3>Keep your notes safe</h3>
+    <div class="sub">Notes auto-save in this browser. To keep them if you clear your browser or switch devices, save a backup file.</div>
+    <div class="rowbtns">
+      <button onclick="backupData()">💾 Save backup to my device<small>Downloads a scribbly-backup.json with every folder &amp; file</small></button>
+      <button onclick="restorePick()">📂 Restore from a backup file<small>Load a scribbly-backup.json — replaces current notes</small></button>
+      <button onclick="closeModal('dataModal');openShare()">📤 Export one note as a webpage<small>A single .html that opens the same everywhere</small></button>
+    </div>
+    <div class="sub" style="margin-top:14px"><b>🪄 Screenshot → hand-drawn diagram</b><br>Paste an Anthropic API key to turn a diagram photo into a sketched flow. It's stored only in this browser and used only for your requests.</div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <input id="aiKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;font-family:var(--font-clean);font-size:13px;padding:9px 10px;color:var(--ink);background:var(--paper2);border:2.5px solid var(--ink);border-radius:12px;outline:none">
+      <button onclick="saveAiKey()" style="padding:9px 14px;font-family:var(--font-clean);background:var(--paper2);color:var(--ink);border:2.5px solid var(--ink);border-radius:12px;box-shadow:2px 2px 0 var(--line2)">Save</button>
+    </div>
+    <div class="sub" style="margin-top:14px">Want real sign-in that syncs across phones? I can wire that up next — it needs a free cloud account.</div>
+    <button class="close" onclick="closeModal('dataModal')">Done</button>
+    <input type="file" id="restoreInput" accept="application/json,.json" style="display:none" onchange="restoreData(this.files[0])">
+  </div>
+</div>
+
+<!-- Read-only shared view -->
+<div id="sharedView">
+  <div class="barx"><span class="n" id="sharedName"></span><button class="tbtn" onclick="exitShared()">✎ Open in Scribbly</button></div>
+  <div class="sheet"><div id="preview" class="preview shared"></div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   Scribbly — self-contained hand-drawn notes app
+   ========================================================= */
+const LS='scribbly_v2';
+let state={tree:null,active:null,expanded:{},theme:'notebook',font:'hand',mode:'split'};
+let dragId=null;
+const CRAY=['#e04f3d','#2f80d8','#37a35a','#8b53c6','#ef9e33','#1fa79c','#e5589b'];
+
+const $=s=>document.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1900);}
+
+/* ---------- tree helpers ---------- */
+function walk(n,fn){fn(n);if(n.children)n.children.forEach(c=>walk(c,fn));}
+function find(id,node=state.tree,parent=null){if(node.id===id)return{node,parent};if(node.children)for(const c of node.children){const f=find(id,c,node);if(f)return f;}return null;}
+function firstFile(node=state.tree){if(node.type==='file')return node;if(node.children)for(const c of node.children){const f=firstFile(c);if(f)return f;}return null;}
+function descIds(n){const ids=[];walk(n,x=>ids.push(x.id));return ids;}
+
+/* ---------- persistence ---------- */
+function save(){try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){}}
+function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.tree)return s;}catch(e){}return null;}
+
+/* ======================= HAND-DRAWN SVG ENGINE ======================= */
+function seeded(seed){let s=(seed*2654435761)>>>0||1;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};}
+function jit(r,a){return (r()*2-1)*a;}
+function handRect(x,y,w,h,r,a){
+  a=a||2.2;const P=(px,py)=>(px+jit(r,a)).toFixed(1)+' '+(py+jit(r,a)).toFixed(1);
+  return 'M '+P(x,y)+' L '+P(x+w,y)+' L '+P(x+w,y+h)+' L '+P(x,y+h)+' Z';
+}
+function handLine(x1,y1,x2,y2,r){
+  const mx=(x1+x2)/2+jit(r,3),my=(y1+y2)/2+jit(r,3);
+  return 'M '+x1.toFixed(1)+' '+y1.toFixed(1)+' Q '+mx.toFixed(1)+' '+my.toFixed(1)+' '+x2.toFixed(1)+' '+y2.toFixed(1);
+}
+/* parse "A -> B -> C" style lines into node chains */
+function parseChains(lines){
+  const chains=[];
+  for(const raw of lines){
+    let l=raw.trim();
+    if(!l||/^(graph|flowchart|sequenceDiagram)\b/i.test(l))continue;
+    l=l.replace(/;+$/,'');
+    const parts=l.split(/-->|->|→|=>/).map(s=>s.trim()).filter(Boolean);
+    const nodes=parts.map(p=>{
+      const m=p.match(/[\[({]([^\])}]+)[\])}]/);          // A[Label] -> Label
+      if(m)return m[1].trim();
+      return p.replace(/\|[^|]*\|/g,'').replace(/^[A-Za-z0-9_]+$/,x=>x).trim();
+    }).filter(Boolean);
+    if(nodes.length>=2)chains.push(nodes);
+  }
+  return chains;
+}
+function isArrowLine(l){
+  const t=l.trim();
+  if(!/(->|-->|→|=>)/.test(t))return false;
+  const parts=t.split(/-->|->|→|=>/).map(s=>s.trim());
+  if(parts.length<2)return false;
+  return parts.every(p=>p.length>0&&p.length<=30&&/^[\w()'"&.,:%\/\- ]+$/.test(p));
+}
+function sketchDiagram(chains){
+  const boxH=54,padX=15,gap=42,charW=9.6,vGap=26,topPad=8;
+  let svgs='';
+  chains.forEach((nodes,ci)=>{
+    const widths=nodes.map(n=>Math.max(64,Math.round(n.length*charW)+padX*2));
+    const totalW=widths.reduce((a,b)=>a+b,0)+gap*(nodes.length-1)+8;
+    const H=boxH+topPad*2;
+    const r=seeded(ci*97+7);
+    let x=4;const y=topPad;let body='';
+    nodes.forEach((n,i)=>{
+      const w=widths[i],col=CRAY[i%CRAY.length];
+      body+='<path d="'+handRect(x,y,w,boxH,r,2.4)+'" fill="'+col+'22" stroke="'+col+'" stroke-width="2.4" stroke-linejoin="round"/>';
+      body+='<path d="'+handRect(x+1.5,y+1.5,w-3,boxH-3,r,2.8)+'" fill="none" stroke="'+col+'" stroke-width="1" opacity=".5"/>';
+      body+='<text x="'+(x+w/2)+'" y="'+(y+boxH/2+6)+'" text-anchor="middle">'+escapeHtml(n)+'</text>';
+      if(i<nodes.length-1){
+        const ax=x+w+4,ax2=x+w+gap-6,ay=y+boxH/2;
+        body+='<path d="'+handLine(ax,ay,ax2,ay,r)+'" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>';
+        body+='<path d="M '+ax2+' '+ay+' l -9 -5 M '+ax2+' '+ay+' l -9 5" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>';
+      }
+      x+=w+gap;
+    });
+    svgs+='<svg width="'+totalW+'" height="'+H+'" viewBox="0 0 '+totalW+' '+H+'">'+body+'</svg>';
+  });
+  return '<div class="diagram">'+svgs+'</div>';
+}
+
+/* ======================= MARKDOWN / AUTO-FORMAT ======================= */
+function inlineFmt(s){
+  s=escapeHtml(s);
+  const codes=[];
+  s=s.replace(/`([^`]+)`/g,(m,c)=>{codes.push(c);return ''+(codes.length-1)+'';});
+  s=s.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g,'<img alt="$1" src="$2">');
+  s=s.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_]+)__/g,'<strong>$1</strong>');
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+  s=s.replace(/(^|[^\w])_([^_\n]+)_(?=$|[^\w])/g,'$1<em>$2</em>');
+  s=s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+  s=s.replace(/==([^=]+)==/g,'<mark>$1</mark>');
+  s=s.replace(/(^|[\s(])((https?:\/\/)[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  s=s.replace(/(\d+)/g,(m,n)=>'<code>'+escapeHtml(codes[+n])+'</code>');
+  return s;
+}
+function splitRow(line){return line.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());}
+const ORD=/^\s*(\d+)[.)](?=\s|[^\d\s])/;                 // 1. / 1) / 2.sliding (but not 3.5)
+function isSpecial(l){
+  return /^\s*(#{1,6}\s|[-*+]\s|>\s?|```|([-*_])\2\2)/.test(l)||ORD.test(l)||/^\s*$/.test(l)||l.indexOf('|')>-1||isArrowLine(l);
+}
+function headingLike(t){
+  if(/^[-*+\d]/.test(t))return false;
+  if(/^[A-Z0-9][A-Z0-9 \-&/,.'()]+$/.test(t)&&t.length<=52&&/[A-Z]/.test(t)&&t.split(' ').length<=9)return 'h2';
+  if(/[:：]\s*$/.test(t)&&t.length<=64&&t.split(' ').length<=11)return 'h3';
+  return false;
+}
+function render(text,auto=true){
+  const lines=text.replace(/\r\n?/g,'\n').split('\n');
+  const out=[];let i=0;let titled=false;
+  while(i<lines.length){
+    let line=lines[i];
+    // fenced code / diagram
+    if(/^\s*```/.test(line)){
+      const lang=((line.match(/^\s*```\s*([\w-]+)?/)||[])[1]||'').toLowerCase();
+      i++;const buf=[];
+      while(i<lines.length&&!/^\s*```/.test(lines[i])){buf.push(lines[i]);i++;}
+      i++;
+      if(lang==='flow'||lang==='diagram'||lang==='mermaid'||lang==='graph'){
+        const ch=parseChains(buf);
+        out.push(ch.length?sketchDiagram(ch):'<pre class="cb"><code>'+escapeHtml(buf.join('\n'))+'</code></pre>');
+      }else out.push('<pre class="cb"><code>'+escapeHtml(buf.join('\n'))+'</code></pre>');
+      continue;
+    }
+    if(/^\s*$/.test(line)){i++;continue;}
+    if(/^\s*([-*_])\1\1+\s*$/.test(line)){out.push('<hr>');i++;continue;}
+    // arrow-chain -> diagram (gather consecutive arrow lines)
+    if(isArrowLine(line)){
+      const buf=[line];i++;
+      while(i<lines.length&&isArrowLine(lines[i])){buf.push(lines[i]);i++;}
+      out.push(sketchDiagram(parseChains(buf)));continue;
+    }
+    let hm=line.match(/^\s*(#{1,6})\s+(.*)$/);
+    if(hm){const lv=hm[1].length;out.push('<h'+lv+'>'+inlineFmt(hm[2].trim())+'</h'+lv+'>');titled=true;i++;continue;}
+    if(/^\s*>\s?/.test(line)){
+      const buf=[];while(i<lines.length&&/^\s*>\s?/.test(lines[i])){buf.push(lines[i].replace(/^\s*>\s?/,''));i++;}
+      out.push('<blockquote>'+render(buf.join('\n'),false)+'</blockquote>');continue;
+    }
+    if(/^\s*[-*+]\s+/.test(line)){
+      const buf=[];
+      while(i<lines.length&&/^\s*[-*+]\s+/.test(lines[i])){
+        let it=lines[i].replace(/^\s*[-*+]\s+/,'');
+        const cb=it.match(/^\[([ xX])\]\s+(.*)$/);
+        if(cb){const ck=cb[1].toLowerCase()==='x';buf.push('<li class="task'+(ck?' done':'')+'"><span class="cbx">'+(ck?'✔':'')+'</span>'+inlineFmt(cb[2])+'</li>');}
+        else buf.push('<li>'+inlineFmt(it)+'</li>');
+        i++;
+      }
+      out.push('<ul>'+buf.join('')+'</ul>');continue;
+    }
+    if(ORD.test(line)){
+      const buf=[];
+      while(i<lines.length&&ORD.test(lines[i])){
+        const m=lines[i].match(/^\s*(\d+)[.)]\s*(.*)$/);
+        buf.push('<li data-n="'+m[1]+'.">'+inlineFmt((m[2]||'').trim())+'</li>');i++;
+      }
+      out.push('<ol>'+buf.join('')+'</ol>');continue;
+    }
+    if(line.indexOf('|')>-1&&i+1<lines.length&&/-/.test(lines[i+1])&&/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i+1])){
+      const header=splitRow(line);i+=2;const rows=[];
+      while(i<lines.length&&lines[i].indexOf('|')>-1&&!/^\s*$/.test(lines[i])){rows.push(splitRow(lines[i]));i++;}
+      let t='<table><thead><tr>'+header.map(h=>'<th>'+inlineFmt(h)+'</th>').join('')+'</tr></thead><tbody>';
+      t+=rows.map(row=>'<tr>'+row.map(c=>'<td>'+inlineFmt(c)+'</td>').join('')+'</tr>').join('');
+      out.push(t+'</tbody></table>');continue;
+    }
+    // heuristic heading (per single line)
+    const t0=line.trim();
+    if(auto){
+      if(!titled){out.push('<h1>'+inlineFmt(t0)+'</h1>');titled=true;i++;continue;}
+      const hl=headingLike(t0);
+      if(hl==='h2'){out.push('<h2>'+inlineFmt(t0)+'</h2>');i++;continue;}
+      if(hl==='h3'){out.push('<h3>'+inlineFmt(t0.replace(/[:：]\s*$/,''))+'</h3>');i++;continue;}
+    }
+    // paragraph: keep each line as a soft break
+    const buf=[line];i++;
+    while(i<lines.length&&!isSpecial(lines[i])&&!(auto&&headingLike(lines[i].trim()))){buf.push(lines[i]);i++;}
+    out.push('<p>'+buf.map(l=>inlineFmt(l.trim())).join('<br>')+'</p>');
+  }
+  return out.join('\n');
+}
+
+/* ======================= TREE UI ======================= */
+function renderTree(){
+  const t=$('#tree');t.innerHTML='';
+  if(!state.tree.children.length){t.innerHTML='<div class="empty-hint">Nothing here yet.<br>Tap <b>File</b> or <b>Folder</b> to begin ✎</div>';return;}
+  state.tree.children.forEach(c=>t.appendChild(nodeEl(c)));
+}
+let editingId=null,editingNew=false;
+function nodeEl(node){
+  const wrap=document.createElement('div');wrap.className='node';
+  const row=document.createElement('div');row.className='row';row.dataset.id=node.id;
+  const isFolder=node.type==='folder',open=!!state.expanded[node.id];
+  const editing=node.id===editingId;
+  row.draggable=!editing;
+  if(isFolder&&open)row.classList.add('open');
+  if(node.id===state.active)row.classList.add('active');
+  const namePart=editing
+    ? '<input class="tree-edit" value="'+escapeHtml(node.name)+'" spellcheck="false" onclick="event.stopPropagation()" '+
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}else if(event.key===\'Escape\'){event.stopPropagation();cancelEdit(\''+node.id+'\');}" '+
+        'onblur="commitEdit(\''+node.id+'\')">'
+    : '<span class="nm">'+escapeHtml(node.name)+'</span>'+
+      '<span class="acts">'+
+        (isFolder?'<button title="New file inside" onclick="event.stopPropagation();startCreate(\'file\',\''+node.id+'\')">＋📄</button>'+
+                  '<button title="New folder inside" onclick="event.stopPropagation();startCreate(\'folder\',\''+node.id+'\')">＋📁</button>':'')+
+        '<button title="Rename" onclick="event.stopPropagation();startRename(\''+node.id+'\')">✎</button>'+
+        '<button title="Delete" onclick="event.stopPropagation();delNode(\''+node.id+'\')">🗑</button>'+
+      '</span>';
+  row.innerHTML=(isFolder?'<span class="twist">▶</span>':'<span class="twist"></span>')+
+    '<span class="ic">'+(isFolder?(open?'📂':'📁'):'📄')+'</span>'+namePart;
+  if(!editing)row.onclick=()=>{isFolder?toggleFolder(node.id):openFile(node.id);};
+  row.ondragstart=e=>{dragId=node.id;e.stopPropagation();e.dataTransfer.effectAllowed='move';};
+  row.ondragover=e=>{if(isFolder&&dragId&&dragId!==node.id){e.preventDefault();row.classList.add('drop-into');}};
+  row.ondragleave=()=>row.classList.remove('drop-into');
+  row.ondrop=e=>{e.preventDefault();e.stopPropagation();row.classList.remove('drop-into');if(isFolder)moveNode(dragId,node.id);};
+  wrap.appendChild(row);
+  if(isFolder&&open){const kids=document.createElement('div');kids.className='children';node.children.forEach(c=>kids.appendChild(nodeEl(c)));wrap.appendChild(kids);}
+  return wrap;
+}
+function focusEdit(){const i=document.querySelector('.tree-edit');if(i){i.focus();i.select();}}
+// top buttons pass no folderId -> create at ROOT.  folder ＋ buttons pass their id -> inside that folder.
+function startCreate(type,folderId){
+  const parentId=folderId||state.tree.id;
+  const node={id:uid(),name:'',type};
+  if(type==='folder')node.children=[];else node.content='';
+  find(parentId).node.children.push(node);
+  if(folderId)state.expanded[folderId]=true;
+  editingId=node.id;editingNew=true;renderTree();focusEdit();
+}
+function startRename(id){editingId=id;editingNew=false;renderTree();focusEdit();}
+function commitEdit(id){
+  if(editingId!==id)return;
+  const inp=document.querySelector('.tree-edit');const val=inp?inp.value.trim():'';
+  const f=find(id);const wasNew=editingNew;editingId=null;editingNew=false;
+  if(!f){renderTree();return;}
+  f.node.name=val||(f.node.type==='folder'?'New folder':'Untitled');
+  save();renderTree();
+  if(id===state.active)$('#fileTitle').value=f.node.name;
+  if(wasNew&&f.node.type==='file')openFile(id);
+}
+function cancelEdit(id){
+  const f=find(id);const wasNew=editingNew;editingId=null;editingNew=false;
+  if(wasNew&&f&&f.parent)f.parent.children=f.parent.children.filter(c=>c.id!==id);
+  renderTree();
+}
+function renameActive(v){if(!state.active)return;const f=find(state.active);if(!f)return;f.node.name=v||'Untitled';save();renderTree();}
+function delNode(id){
+  const f=find(id);if(!f||!f.parent)return;
+  const kind=f.node.type==='folder'?'folder and everything inside it':'file';
+  if(!confirm('Delete "'+f.node.name+'" ('+kind+')? This cannot be undone.'))return;
+  const affected=descIds(f.node);
+  f.parent.children=f.parent.children.filter(c=>c.id!==id);
+  if(affected.includes(state.active)){state.active=null;const nf=firstFile();nf?openFile(nf.id):clearEditor();}
+  save();renderTree();
+}
+function moveNode(id,folderId){
+  if(id===folderId)return;const src=find(id),dst=find(folderId);
+  if(!src||!dst||dst.node.type!=='folder')return;
+  if(descIds(src.node).includes(folderId)){toast("Can't move a folder into itself");return;}
+  src.parent.children=src.parent.children.filter(c=>c.id!==id);
+  dst.node.children.push(src.node);state.expanded[folderId]=true;save();renderTree();
+}
+function toggleFolder(id){state.expanded[id]=!state.expanded[id];save();renderTree();}
+function openFile(id){
+  const f=find(id);if(!f||f.node.type!=='file')return;
+  state.active=id;$('#fileTitle').value=f.node.name;$('#editor').value=f.node.content||'';
+  updatePreview();save();renderTree();
+  if(window.innerWidth<=760)toggleSidebar(false);
+}
+function clearEditor(){$('#editor').value='';$('#fileTitle').value='';$('#preview').innerHTML='<div class="doc-empty">Pick a file or create one to start writing ✎</div>';$('#counts').textContent='0 words · 0 chars';}
+
+/* ---------- editor wiring ---------- */
+let saveTimer;
+function onEdit(){
+  updatePreview();
+  const st=$('#saveState');st.textContent='● saving…';st.classList.remove('saved');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{if(state.active){const f=find(state.active);if(f)f.node.content=$('#editor').value;}save();st.textContent='● saved';st.classList.add('saved');},350);
+}
+function updatePreview(){
+  const v=$('#editor').value;
+  $('#preview').innerHTML=v.trim()?render(v):'<div class="doc-empty">Your formatted note appears here ✨</div>';
+  const words=(v.trim().match(/\S+/g)||[]).length;
+  $('#counts').textContent=words+' words · '+v.length+' chars';
+}
+/* insert text at the textarea caret (used by voice + images) */
+function insertAtCursor(text){
+  const ta=$('#editor');const s=ta.selectionStart||0,e=ta.selectionEnd||0;
+  ta.value=ta.value.slice(0,s)+text+ta.value.slice(e);
+  const c=s+text.length;ta.selectionStart=ta.selectionEnd=c;ta.focus();onEdit();
+}
+
+/* ======================= VOICE TYPING ======================= */
+let recog=null,recording=false,micBefore='',micAfter='',micFinal='';
+function updateMicUI(){const b=$('#micBtn');if(!b)return;b.classList.toggle('rec',recording);b.textContent=recording?'⏹ Stop':'🎤 Speak';}
+function stopMic(){recording=false;if(recog){try{recog.stop();}catch(e){}}updateMicUI();}
+function toggleMic(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Voice typing needs Chrome, Edge, or Safari');return;}
+  if(recording){stopMic();toast('Stopped ✓');return;}
+  const ta=$('#editor');ta.focus();
+  const pos=(ta.selectionStart==null)?ta.value.length:ta.selectionStart;
+  micBefore=ta.value.slice(0,pos);micAfter=ta.value.slice(pos);micFinal='';
+  recog=new SR();recog.lang='en-US';recog.interimResults=true;recog.continuous=true;
+  recog.onstart=()=>{toast('Listening… speak now 🎤');};
+  recog.onresult=e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal)micFinal+=r[0].transcript;else interim+=r[0].transcript;
+    }
+    const ins=micFinal+interim;
+    ta.value=micBefore+ins+micAfter;
+    const c=micBefore.length+ins.length;ta.selectionStart=ta.selectionEnd=c;
+    onEdit();
+  };
+  recog.onerror=ev=>{
+    if(ev.error==='no-speech'||ev.error==='aborted')return;   // transient — keep going
+    recording=false;updateMicUI();
+    toast(ev.error==='not-allowed'||ev.error==='service-not-allowed'
+      ? 'Microphone blocked — click the 🔒 in the address bar and allow the mic'
+      : 'Voice error: '+ev.error);
+  };
+  recog.onend=()=>{
+    if(recording){try{recog.start();}catch(e){}}   // Chrome auto-stops on pauses — restart while active
+    else{onEdit();updateMicUI();}
+  };
+  try{recog.start();recording=true;updateMicUI();}
+  catch(e){recording=false;updateMicUI();toast('Could not start the microphone');}
+}
+
+/* ======================= IMAGE EMBED ======================= */
+function embedImageFile(file){
+  if(!file||file.type.indexOf('image')!==0)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=1000;let{width:w,height:h}=img;
+      if(w>max){h=Math.round(h*max/w);w=max;}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      let url;try{url=cv.toDataURL('image/jpeg',0.82);}catch(e){url=rd.result;}
+      if(url.length>2600000){toast('That image is large — it may not save. Try a smaller one.');}
+      insertAtCursor('\n\n![diagram]('+url+')\n\n');
+      toast('Image added — it shows framed in the formatted view ✨');
+    };
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+
+/* ======================= SCREENSHOT -> DIAGRAM (Claude vision) ======================= */
+function getAiKey(){return localStorage.getItem('scribbly_ai_key')||'';}
+function saveAiKey(){const v=($('#aiKey').value||'').trim();if(v)localStorage.setItem('scribbly_ai_key',v);else localStorage.removeItem('scribbly_ai_key');toast(v?'AI key saved ✓':'AI key cleared');}
+function pickDiagramImage(){
+  if(!getAiKey()){openData();setTimeout(()=>{const k=$('#aiKey');if(k)k.focus();},120);toast('Add your Anthropic API key first (in 💾)');return;}
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=()=>{if(inp.files&&inp.files[0])imageToDiagram(inp.files[0]);};inp.click();
+}
+function fileToJpegB64(file,max){
+  return new Promise((res,rej)=>{
+    const rd=new FileReader();
+    rd.onload=()=>{const img=new Image();img.onload=()=>{
+      let w=img.width,h=img.height;if(w>max){h=Math.round(h*max/w);w=max;}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
+      res(cv.toDataURL('image/jpeg',0.85).split(',')[1]);
+    };img.onerror=rej;img.src=rd.result;};rd.onerror=rej;rd.readAsDataURL(file);
+  });
+}
+async function imageToDiagram(file){
+  const key=getAiKey();if(!key)return;
+  toast('🪄 Reading your diagram…');
+  try{
+    const b64=await fileToJpegB64(file,1500);
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-opus-4-8',max_tokens:1024,messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+        {type:'text',text:'This image is a flowchart, workflow, or system-design diagram. Reproduce its structure as arrow chains. Output ONLY plain text: an optional short title on the first line, then one flow per line using " -> " between short node labels (each label under 24 characters). Follow the real arrows; output one line per distinct path. No code fences, no commentary, no markdown.'}
+      ]}]})
+    });
+    if(!res.ok){const t=await res.text();throw new Error('HTTP '+res.status+' — '+t.slice(0,120));}
+    const data=await res.json();
+    const txt=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+    const lines=txt.split('\n').map(s=>s.trim()).filter(Boolean);
+    const flows=lines.filter(l=>/(->|-->|→)/.test(l));
+    if(!flows.length)throw new Error('no flow found in that image');
+    const title=lines.find(l=>!/(->|-->|→)/.test(l));
+    const block='\n'+(title?title+'\n\n':'')+'```flow\n'+flows.join('\n')+'\n```\n\n';
+    insertAtCursor(block);
+    toast('Diagram drawn ✨');
+  }catch(e){toast('Could not convert: '+(e.message||e));}
+}
+
+/* ---------- top bar ---------- */
+function setMode(m){state.mode=m;$('#work').className='mode-'+m;$('#viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));save();}
+function toggleTheme(){state.theme=state.theme==='notebook'?'blackboard':'notebook';applyTheme();save();}
+function applyTheme(){document.documentElement.setAttribute('data-theme',state.theme);$('#themeBtn').textContent=state.theme==='blackboard'?'📔':'🌙';}
+function toggleFont(){state.font=state.font==='hand'?'clean':'hand';applyFont();save();}
+function applyFont(){document.documentElement.setAttribute('data-font',state.font);$('#fontBtn').textContent=state.font==='hand'?'✍️ Handwritten':'🖊️ Print';}
+function toggleSidebar(force){const sb=$('#sidebar'),sc=$('#scrim');const open=force===undefined?!sb.classList.contains('open'):force;sb.classList.toggle('open',open);if(sc)sc.classList.toggle('on',open);}
+function closeModal(id){$('#'+id).classList.remove('on');}
+
+/* ======================= SHARE ======================= */
+function currentFile(){return state.active?find(state.active).node:null;}
+function shareText(){const f=currentFile();if(!f)return'';let t=$('#editor').value||'';if(t.length>1400)t=t.slice(0,1400)+'…';return'📝 '+f.name+'\n\n'+t;}
+function shareLink(){
+  const f=currentFile();if(!f)return location.href;
+  const payload=JSON.stringify({n:f.name,c:$('#editor').value||''});
+  const b64=btoa(unescape(encodeURIComponent(payload))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  return location.origin+location.pathname+'#doc='+b64;
+}
+function buildExportHTML(name,content){
+  const body=render(content||'');
+  const css=document.querySelector('style').textContent;
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>'+escapeHtml(name)+'</title>'+
+    '<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Gochi+Hand&display=swap" rel="stylesheet">'+
+    '<style>'+css+'body{background:var(--desk);background-image:radial-gradient(var(--faint) 1.1px,transparent 1.1px);background-size:24px 24px;font-family:var(--font-hand)}'+
+    '.sheet{max-width:840px;margin:26px auto;background:var(--paper);border:2.5px solid var(--ink);border-radius:8px 20px 8px 20px/20px 8px 20px 8px;box-shadow:var(--shadow);padding:34px 44px 60px}'+
+    '.credit{max-width:840px;margin:0 auto 30px;padding:0 8px;font-family:var(--font-clean);font-size:12px;color:var(--muted);text-align:center}</style></head>'+
+    '<body data-theme="'+state.theme+'" data-font="'+state.font+'"><div id="preview" class="sheet">'+body+'</div>'+
+    '<div class="credit">✎ Made with Scribbly — this file keeps its formatting anywhere you open it.</div></body></html>';
+}
+function downloadFile(name,content,type){
+  const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+function copy(txt,msg){(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(msg||'Copied ✓')).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();toast(msg||'Copied ✓');});}
+function openShare(){
+  const f=currentFile();if(!f){toast('Open a file first');return;}
+  const items=[];
+  if(navigator.share)items.push(['📱','Share…','shareNative']);
+  items.push(['💬','WhatsApp','shareWA'],['✈️','Telegram','shareTG'],['✉️','Email','shareMail'],
+             ['🔗','Copy link','shareCopyLink'],['📋','Copy text','shareCopyText'],
+             ['🌐','Download page','shareDownloadHTML'],['⬇️','Download .md','shareDownloadMD']);
+  $('#shareGrid').innerHTML=items.map(it=>'<button onclick="'+it[2]+'()"><span class="em">'+it[0]+'</span>'+it[1]+'</button>').join('');
+  $('#shareModal').classList.add('on');
+}
+async function shareNative(){
+  const f=currentFile();
+  try{
+    const html=buildExportHTML(f.name,$('#editor').value);
+    const file=new File([html],(f.name||'note')+'.html',{type:'text/html'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:f.name,text:'📝 '+f.name});}
+    else{await navigator.share({title:f.name,text:shareText(),url:shareLink()});}
+  }catch(e){}
+}
+function shareWA(){window.open('https://wa.me/?text='+encodeURIComponent(shareText()+'\n\n'+shareLink()),'_blank');}
+function shareTG(){window.open('https://t.me/share/url?url='+encodeURIComponent(shareLink())+'&text='+encodeURIComponent(shareText()),'_blank');}
+function shareMail(){const f=currentFile();location.href='mailto:?subject='+encodeURIComponent(f.name)+'&body='+encodeURIComponent(shareText()+'\n\n'+shareLink());}
+function shareCopyLink(){copy(shareLink(),'Link copied — anyone with it sees your note ✓');}
+function shareCopyText(){copy($('#editor').value||'','Note text copied ✓');}
+function shareDownloadHTML(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.html',buildExportHTML(f.name,$('#editor').value),'text/html');toast('Webpage downloaded ✓');closeModal('shareModal');}
+function shareDownloadMD(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.md',$('#editor').value||'','text/markdown');toast('Markdown downloaded ✓');closeModal('shareModal');}
+
+/* ======================= DATA / BACKUP ======================= */
+function openData(){const k=$('#aiKey');if(k)k.value=getAiKey();$('#dataModal').classList.add('on');}
+function backupData(){downloadFile('scribbly-backup.json',JSON.stringify({app:'scribbly',v:2,tree:state.tree,expanded:state.expanded},null,2),'application/json');toast('Backup saved ✓');}
+function restorePick(){$('#restoreInput').click();}
+function restoreData(file){
+  if(!file)return;const rd=new FileReader();
+  rd.onload=()=>{try{
+    const data=JSON.parse(rd.result);const tree=data.tree||(data.app?null:data);
+    if(!tree||!tree.children){toast('That file is not a Scribbly backup');return;}
+    if(!confirm('Restore this backup? It replaces your current notes.'))return;
+    state.tree=tree;state.expanded=data.expanded||{};state.active=null;
+    save();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();closeModal('dataModal');toast('Notes restored ✓');
+  }catch(e){toast('Could not read that file');}};
+  rd.readAsText(file);
+}
+
+/* ======================= SHARED-LINK VIEWER ======================= */
+function openSharedFromHash(){
+  const m=location.hash.match(/^#doc=(.+)$/);if(!m)return false;
+  try{
+    let b64=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';
+    const data=JSON.parse(decodeURIComponent(escape(atob(b64))));
+    document.title=data.n+' · Scribbly';
+    $('#sharedName').textContent=data.n||'Shared note';
+    $('#sharedView').querySelector('#preview').innerHTML=render(data.c||'');
+    $('#sharedView').classList.add('on');
+    return true;
+  }catch(e){return false;}
+}
+function exitShared(){location.hash='';$('#sharedView').classList.remove('on');}
+
+/* ======================= SEED ======================= */
+function seed(){
+  const hld1=['Design a URL Shortener','','A classic HLD warm-up. Goal: turn long URLs into short ones and redirect fast.','',
+    'REQUIREMENTS','Shorten a long URL to a 7-char code.','Redirect from short code to original in < 100ms.','Handle ~100M new URLs per month.','',
+    'The request flow:','','```flow','User -> API -> Encode -> Database','User -> API -> Cache -> Redirect','```','',
+    'Core estimates:','- 100M/month ~= 40 writes/sec','- Read:write is about 100:1, so ~4000 reads/sec','- 5 years of data ~= 6B rows','',
+    'Encoding:','Use base62 [a-zA-Z0-9] over an auto-increment ID. 62^7 is ~3.5 trillion codes.','',
+    '> Tip: keep the counter in a distributed range allocator so you never hit a single DB row for every write.','',
+    'API sketch:','```','POST /shorten  { url }  -> { code }','GET  /{code}            -> 302 redirect','```','',
+    'Follow-ups to expect','- [x] Custom aliases','- [ ] Analytics / click counts','- [ ] Link expiry & rate limiting'].join('\n');
+  const hld2=['Design a Rate Limiter','','INTERVIEWER FAVORITE','Protect an API from too many requests per client.','',
+    'Algorithms:','1. Token bucket — smooth, allows bursts','2. Leaky bucket — constant outflow','3. Sliding window log — accurate, more memory','',
+    'Request path:','','Client -> Limiter -> Redis -> Allow or Reject','',
+    'Where to store counters?','Redis with atomic INCR + EXPIRE is the standard answer.','',
+    '| Algorithm | Bursts | Memory |','| --- | --- | --- |','| Token bucket | yes | low |','| Sliding log | no | high |'].join('\n');
+  const dsa=['Two Pointer Technique','','PATTERN','Use two indices moving through an array to hit O(n) instead of O(n^2).','',
+    'When to reach for it:','- Sorted array + find a pair','- Reverse / palindrome checks','- Removing duplicates in place','',
+    'Remember: **sort first** if the problem lets you.'].join('\n');
+  const welcome=['Welcome to Scribbly','','You type plain notes. Scribbly formats them for you — colors, sizes, spacing — automatically.','',
+    'HOW IT WORKS','The first line becomes the big title. An ALL CAPS line becomes a section heading. A line ending with a colon becomes a sub-heading:','',
+    'Things you can do:','- Start a line with a dash for a bullet','- [ ] Or a checkbox','- [x] Tick it when done','- Wrap words in **bold**, *italic* or ==highlight==','',
+    'Turn text into a diagram:','Just type arrows and it draws itself —','','Idea -> Draft -> Review -> Publish','',
+    '> Quotes look like this — great for the one line you want to remember.','',
+    'Folders & files','Use the left panel to make folders and files. Try the sample Interview Prep folder. Drag a file onto a folder to move it.','',
+    'Sharing','Hit Share for WhatsApp, Telegram, a copy-able link, or a single .html that looks identical anywhere.','',
+    'Now delete this and start writing ✎'].join('\n');
+  return {id:'root',name:'root',type:'folder',children:[
+    {id:uid(),name:'Interview Prep',type:'folder',children:[
+      {id:uid(),name:'HLD System Design',type:'folder',children:[
+        {id:uid(),name:'URL Shortener',type:'file',content:hld1},
+        {id:uid(),name:'Rate Limiter',type:'file',content:hld2}]},
+      {id:uid(),name:'DSA Patterns',type:'folder',children:[
+        {id:uid(),name:'Two Pointers',type:'file',content:dsa}]}]},
+    {id:uid(),name:'Welcome',type:'file',content:welcome}]};
+}
+
+/* ======================= BOOT ======================= */
+function boot(){
+  // shared read-only link?
+  if(location.hash.indexOf('#doc=')===0){
+    const saved=load();state.theme=(saved&&saved.theme)||'notebook';state.font=(saved&&saved.font)||'hand';
+    applyTheme();applyFont();
+    if(openSharedFromHash())return;
+  }
+  const saved=load();
+  if(saved){
+    state=Object.assign(state,saved);
+    if(state.theme==='chalk'||state.theme==='paper')state.theme=state.theme==='chalk'?'blackboard':'notebook';
+  }else{
+    state.tree=seed();walk(state.tree,n=>{if(n.type==='folder'&&n.id!=='root')state.expanded[n.id]=true;});
+  }
+  applyTheme();applyFont();setMode(state.mode||'split');renderTree();
+  const start=(state.active&&find(state.active))?state.active:(firstFile()?firstFile().id:null);
+  start?openFile(start):clearEditor();
+  $('#editor').addEventListener('input',onEdit);
+  $('#editor').addEventListener('keydown',e=>{
+    if(e.key==='Tab'){e.preventDefault();const t=e.target,s=t.selectionStart,en=t.selectionEnd;t.value=t.value.slice(0,s)+'  '+t.value.slice(en);t.selectionStart=t.selectionEnd=s+2;onEdit();}
+  });
+  // paste or drop an image -> embed it in the note
+  $('#editor').addEventListener('paste',e=>{
+    const items=e.clipboardData&&e.clipboardData.items;if(!items)return;
+    for(const it of items){if(it.type.indexOf('image')===0){e.preventDefault();embedImageFile(it.getAsFile());return;}}
+  });
+  $('#editor').addEventListener('dragover',e=>{if(e.dataTransfer&&e.dataTransfer.types.indexOf('Files')>-1){e.preventDefault();}});
+  $('#editor').addEventListener('drop',e=>{
+    const files=e.dataTransfer&&e.dataTransfer.files;if(files&&files.length&&files[0].type.indexOf('image')===0){e.preventDefault();embedImageFile(files[0]);}
+  });
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal('shareModal');closeModal('dataModal');}});
+  window.addEventListener('hashchange',()=>{if(location.hash.indexOf('#doc=')===0)openSharedFromHash();else if($('#sharedView').classList.contains('on'))location.reload();});
+  // installable-app (PWA): only active when hosted over http/https
+  if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  }
+}
+boot();
+</script>
