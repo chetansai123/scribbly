@@ -217,6 +217,26 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
   color:var(--ink); border:2.5px solid var(--ink); border-radius:14px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
 .modal .rowbtns button:hover{transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--accent)}
 .modal .rowbtns small{display:block; color:var(--muted); font-size:12px; margin-top:2px}
+/* auth modal */
+.auth-in{font-family:var(--font-clean); font-size:14px; color:var(--ink)}
+.auth-in input{width:100%; box-sizing:border-box; font-family:var(--font-clean); font-size:14.5px; padding:11px 12px; margin-top:8px;
+  color:var(--ink); background:var(--paper2); border:2.5px solid var(--ink); border-radius:12px; outline:none}
+.auth-in input:focus{border-color:var(--accent)}
+.btn-google{display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:12px; font-family:var(--font-clean);
+  font-size:15px; font-weight:700; background:#fff; color:#222; border:2.5px solid var(--ink); border-radius:14px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+.btn-google:hover{transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--accent)}
+.btn-primary{width:100%; padding:11px; margin-top:10px; font-family:var(--font-clean); font-size:15px; font-weight:700;
+  background:var(--accent); color:var(--accent-ink); border:2.5px solid var(--ink); border-radius:12px; box-shadow:2px 2px 0 var(--line2); transition:.12s}
+.btn-primary:hover{transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink)}
+.auth-div{display:flex; align-items:center; gap:10px; margin:16px 0; color:var(--muted); font-family:var(--font-clean); font-size:12px}
+.auth-div::before,.auth-div::after{content:""; flex:1; height:2px; background:var(--line); border-radius:2px}
+.auth-alt{margin-top:12px; text-align:center; font-family:var(--font-clean); font-size:13px; color:var(--muted)}
+.auth-alt a{color:var(--accent); cursor:pointer; text-decoration:underline}
+.auth-guest{width:100%; margin-top:14px; padding:9px; background:none; border:2px dashed var(--line2); border-radius:12px;
+  font-family:var(--font-clean); font-size:13.5px; color:var(--muted)}
+.auth-guest:hover{color:var(--ink); border-color:var(--ink)}
+#authBtn.on{background:color-mix(in srgb,var(--h4) 22%,var(--paper2)); border-color:var(--h4); color:var(--ink)}
+#syncState{color:var(--muted)} #syncState.ok{color:var(--h4)} #syncState.err{color:var(--h3)}
 
 /* read-only shared view */
 #sharedView{position:fixed; inset:0; z-index:80; overflow:auto; background:var(--desk);
@@ -274,6 +294,7 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
       <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Theme">🌙</button>
       <button class="icon-btn" onclick="pickDiagramImage()" title="Screenshot → hand-drawn diagram (AI)">🪄</button>
       <button class="icon-btn" onclick="openData()" title="Backup / restore">💾</button>
+      <button class="tbtn" id="authBtn" onclick="openAuth()" title="Sign in to sync across devices">☁️ Sign in</button>
       <button class="tbtn" onclick="openShare()">📤 Share</button>
     </div>
     <div id="work" class="mode-split">
@@ -290,6 +311,7 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
     </div>
     <div id="status">
       <span id="saveState" class="saved">● saved</span>
+      <span id="syncState" style="display:none"></span>
       <span class="grow"></span>
       <span id="counts">0 words · 0 chars</span>
     </div>
@@ -321,10 +343,15 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
       <input id="aiKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;font-family:var(--font-clean);font-size:13px;padding:9px 10px;color:var(--ink);background:var(--paper2);border:2.5px solid var(--ink);border-radius:12px;outline:none">
       <button onclick="saveAiKey()" style="padding:9px 14px;font-family:var(--font-clean);background:var(--paper2);color:var(--ink);border:2.5px solid var(--ink);border-radius:12px;box-shadow:2px 2px 0 var(--line2)">Save</button>
     </div>
-    <div class="sub" style="margin-top:14px">Want real sign-in that syncs across phones? I can wire that up next — it needs a free cloud account.</div>
+    <div class="sub" style="margin-top:14px">Tip: <b>☁️ Sign in</b> (top bar) syncs your notes to every device automatically — this backup is for keeping an offline copy or moving between accounts.</div>
     <button class="close" onclick="closeModal('dataModal')">Done</button>
     <input type="file" id="restoreInput" accept="application/json,.json" style="display:none" onchange="restoreData(this.files[0])">
   </div>
+</div>
+
+<!-- Auth / account modal -->
+<div class="modal-back" id="authModal" onclick="if(event.target===this)closeModal('authModal')">
+  <div class="modal sketch" id="authBody"></div>
 </div>
 
 <!-- Read-only shared view -->
@@ -340,8 +367,14 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
    Scribbly — self-contained hand-drawn notes app
    ========================================================= */
 const LS='scribbly_v2';
-let state={tree:null,active:null,expanded:{},theme:'notebook',font:'hand',mode:'split'};
+/* Supabase cloud sync — these are PUBLIC values, safe to commit.
+   The publishable key is protected by Row-Level Security; it cannot read
+   another user's data. The real secret (service_role) is never used here. */
+const SB_URL='https://sookqeqvhgzlgcvswjqo.supabase.co';
+const SB_KEY='sb_publishable_Y2CsyCrwucyWgozzzckE_Q_hr0bLow4';
+let state={tree:null,active:null,expanded:{},theme:'notebook',font:'hand',mode:'split',cloudUserId:null,dirty:false,updatedAt:0};
 let dragId=null;
+let supa=null,sbSession=null,pushTimer=null;
 const CRAY=['#e04f3d','#2f80d8','#37a35a','#8b53c6','#ef9e33','#1fa79c','#e5589b'];
 
 const $=s=>document.querySelector(s);
@@ -357,6 +390,8 @@ function descIds(n){const ids=[];walk(n,x=>ids.push(x.id));return ids;}
 
 /* ---------- persistence ---------- */
 function save(){try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){}}
+/* mark that the user changed real content (drives cloud sync + login merge) */
+function touch(){state.dirty=true;state.updatedAt=Date.now();schedulePush();}
 function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.tree)return s;}catch(e){}return null;}
 
 /* ======================= HAND-DRAWN SVG ENGINE ======================= */
@@ -574,7 +609,7 @@ function commitEdit(id){
   const f=find(id);const wasNew=editingNew;editingId=null;editingNew=false;
   if(!f){renderTree();return;}
   f.node.name=val||(f.node.type==='folder'?'New folder':'Untitled');
-  save();renderTree();
+  save();touch();renderTree();
   if(id===state.active)$('#fileTitle').value=f.node.name;
   if(wasNew&&f.node.type==='file')openFile(id);
 }
@@ -583,7 +618,7 @@ function cancelEdit(id){
   if(wasNew&&f&&f.parent)f.parent.children=f.parent.children.filter(c=>c.id!==id);
   renderTree();
 }
-function renameActive(v){if(!state.active)return;const f=find(state.active);if(!f)return;f.node.name=v||'Untitled';save();renderTree();}
+function renameActive(v){if(!state.active)return;const f=find(state.active);if(!f)return;f.node.name=v||'Untitled';save();touch();renderTree();}
 function delNode(id){
   const f=find(id);if(!f||!f.parent)return;
   const kind=f.node.type==='folder'?'folder and everything inside it':'file';
@@ -591,14 +626,14 @@ function delNode(id){
   const affected=descIds(f.node);
   f.parent.children=f.parent.children.filter(c=>c.id!==id);
   if(affected.includes(state.active)){state.active=null;const nf=firstFile();nf?openFile(nf.id):clearEditor();}
-  save();renderTree();
+  save();touch();renderTree();
 }
 function moveNode(id,folderId){
   if(id===folderId)return;const src=find(id),dst=find(folderId);
   if(!src||!dst||dst.node.type!=='folder')return;
   if(descIds(src.node).includes(folderId)){toast("Can't move a folder into itself");return;}
   src.parent.children=src.parent.children.filter(c=>c.id!==id);
-  dst.node.children.push(src.node);state.expanded[folderId]=true;save();renderTree();
+  dst.node.children.push(src.node);state.expanded[folderId]=true;save();touch();renderTree();
 }
 function toggleFolder(id){state.expanded[id]=!state.expanded[id];save();renderTree();}
 function openFile(id){
@@ -615,7 +650,7 @@ function onEdit(){
   updatePreview();
   const st=$('#saveState');st.textContent='● saving…';st.classList.remove('saved');
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{if(state.active){const f=find(state.active);if(f)f.node.content=$('#editor').value;}save();st.textContent='● saved';st.classList.add('saved');},350);
+  saveTimer=setTimeout(()=>{if(state.active){const f=find(state.active);if(f)f.node.content=$('#editor').value;}save();touch();st.textContent='● saved';st.classList.add('saved');},350);
 }
 function updatePreview(){
   const v=$('#editor').value;
@@ -807,9 +842,139 @@ function restoreData(file){
     if(!tree||!tree.children){toast('That file is not a Scribbly backup');return;}
     if(!confirm('Restore this backup? It replaces your current notes.'))return;
     state.tree=tree;state.expanded=data.expanded||{};state.active=null;
-    save();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();closeModal('dataModal');toast('Notes restored ✓');
+    save();touch();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();closeModal('dataModal');toast('Notes restored ✓');
   }catch(e){toast('Could not read that file');}};
   rd.readAsText(file);
+}
+
+/* ======================= CLOUD SYNC (Supabase) ======================= */
+function setSyncState(s){
+  const el=$('#syncState');if(!el)return;
+  if(!sbSession){el.style.display='none';return;}
+  el.style.display='';el.className='';
+  if(s==='saving'){el.textContent='☁ syncing…';}
+  else if(s==='synced'){el.textContent='☁ synced';el.className='ok';}
+  else if(s==='error'){el.textContent='⚠ offline — saved on device';el.className='err';}
+}
+function cloneNode(n){const c={id:uid(),name:n.name,type:n.type};if(n.type==='folder')c.children=(n.children||[]).map(cloneNode);else c.content=n.content||'';return c;}
+async function ensureSupa(){
+  if(supa)return supa;
+  if(!SB_URL||!SB_KEY)return null;
+  try{
+    const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    supa=mod.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    supa.auth.onAuthStateChange((_ev,session)=>{
+      if(session){ if(!sbSession)onSignedIn(session); else sbSession=session; }
+      else { sbSession=null;state.cloudUserId=null;save();updateAuthUI(); }
+    });
+    return supa;
+  }catch(e){toast('Cloud unavailable (offline?) — notes stay on this device');return null;}
+}
+async function pullRow(){
+  const {data,error}=await supa.from('workspaces').select('data,updated_at').eq('user_id',sbSession.user.id).maybeSingle();
+  if(error)throw error;return data;
+}
+async function pushWorkspace(){
+  if(!supa||!sbSession)return;
+  setSyncState('saving');
+  try{
+    const ts=new Date().toISOString();
+    const {error}=await supa.from('workspaces').upsert({user_id:sbSession.user.id,data:{tree:state.tree,expanded:state.expanded},updated_at:ts});
+    if(error)throw error;
+    state.dirty=false;save();setSyncState('synced');
+  }catch(e){setSyncState('error');}
+}
+function schedulePush(){if(!supa||!sbSession)return;setSyncState('saving');clearTimeout(pushTimer);pushTimer=setTimeout(pushWorkspace,1400);}
+function loadCloud(cloud){
+  state.tree=cloud.tree;state.expanded=cloud.expanded||{};state.active=null;state.dirty=false;state.cloudUserId=sbSession.user.id;
+  save();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();
+}
+async function onSignedIn(session){
+  sbSession=session;updateAuthUI();closeModal('authModal');
+  const U=session.user.id,prevUser=state.cloudUserId,wasDirty=!!state.dirty,localTs=state.updatedAt||0,localTree=state.tree;
+  toast('Signed in — syncing…');
+  let cloud=null,cloudTs=0;
+  try{const row=await pullRow();if(row){cloud=row.data;cloudTs=Date.parse(row.updated_at)||0;}}
+  catch(e){setSyncState('error');toast('Cloud read failed — working locally');return;}
+  if(!cloud||!cloud.tree||!cloud.tree.children){           // empty account -> adopt local
+    state.cloudUserId=U;save();await pushWorkspace();updateAuthUI();toast('Your notes are now in your account ✓');return;
+  }
+  if(prevUser===U){                                        // same account reopening -> last write wins
+    if(localTs>cloudTs){state.cloudUserId=U;await pushWorkspace();toast('Synced this device ✓');}
+    else{loadCloud(cloud);toast('Loaded your latest notes ✓');}
+  }else{                                                    // first login on this device -> cloud is truth, import local edits
+    loadCloud(cloud);
+    if(wasDirty&&localTree&&(localTree.children||[]).length){
+      const kids=(localTree.children||[]).map(cloneNode);
+      if(kids.length){state.tree.children.push({id:uid(),name:'📥 Imported '+new Date().toLocaleDateString(),type:'folder',children:kids});save();await pushWorkspace();}
+      toast('Loaded your notes + merged this device ✓');
+    }else toast('Loaded your notes ✓');
+    state.cloudUserId=U;save();
+  }
+  updateAuthUI();
+}
+/* ---------- auth UI + actions ---------- */
+function openAuth(){renderAuthModal();$('#authModal').classList.add('on');}
+function updateAuthUI(){
+  const b=$('#authBtn');
+  if(b){
+    if(sbSession){const em=sbSession.user.email||'account';b.textContent='☁️ '+em.split('@')[0];b.classList.add('on');b.title='Synced — '+em;}
+    else{b.textContent='☁️ Sign in';b.classList.remove('on');b.title='Sign in to sync across devices';}
+  }
+  setSyncState(sbSession?'synced':'');
+  if($('#authModal').classList.contains('on'))renderAuthModal();
+}
+function renderAuthModal(){
+  const box=$('#authBody');if(!box)return;
+  if(sbSession){
+    const em=sbSession.user.email||'your account';
+    box.innerHTML='<h3>Your account</h3>'+
+      '<div class="sub">Signed in as <b>'+em.replace(/[<>&]/g,'')+'</b>. Your notes sync automatically to every device you sign in on.</div>'+
+      '<div class="auth-in"><button class="btn-primary" onclick="signOut()">Sign out</button>'+
+      '<button class="auth-guest" onclick="closeModal(\'authModal\')">Keep working</button></div>';
+  }else{
+    box.innerHTML='<h3>Sign in to sync</h3>'+
+      '<div class="sub">Your folders &amp; files follow you to any computer or phone. Free, and your notes are private to you.</div>'+
+      '<div class="auth-in">'+
+        '<button class="btn-google" onclick="signInGoogle()"><span style="font-size:18px">🇬</span> Continue with Google</button>'+
+        '<div class="auth-div">or with email</div>'+
+        '<input id="authEmail" type="email" placeholder="you@email.com" autocomplete="username" spellcheck="false">'+
+        '<input id="authPass" type="password" placeholder="password" autocomplete="current-password">'+
+        '<button class="btn-primary" id="authGo" onclick="signInEmail(authMode)">Sign in</button>'+
+        '<div class="auth-alt" id="authToggle"></div>'+
+        '<button class="auth-guest" onclick="closeModal(\'authModal\')">Continue as guest (stay on this device)</button>'+
+      '</div>';
+    setAuthMode('in');
+  }
+}
+let authMode='in';
+function setAuthMode(m){
+  authMode=m;const go=$('#authGo'),tg=$('#authToggle');if(!go)return;
+  if(m==='in'){go.textContent='Sign in';tg.innerHTML='New here? <a onclick="setAuthMode(\'up\')">Create an account</a>';}
+  else{go.textContent='Create account';tg.innerHTML='Already have one? <a onclick="setAuthMode(\'in\')">Sign in</a>';}
+}
+async function signInGoogle(){
+  const c=await ensureSupa();if(!c){toast('Cloud unavailable');return;}
+  const {error}=await c.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
+  if(error)toast(error.message);
+}
+async function signInEmail(mode){
+  const c=await ensureSupa();if(!c)return;
+  const email=($('#authEmail').value||'').trim(),pass=$('#authPass').value||'';
+  if(!email||!pass){toast('Enter your email and password');return;}
+  if(mode==='up'&&pass.length<6){toast('Password must be at least 6 characters');return;}
+  try{
+    const {data,error}=mode==='up'
+      ? await c.auth.signUp({email,password:pass})
+      : await c.auth.signInWithPassword({email,password:pass});
+    if(error){toast(error.message);return;}
+    if(mode==='up'&&!data.session){toast('Account made — check your email to confirm, then sign in');return;}
+    /* onAuthStateChange -> onSignedIn handles the sync */
+  }catch(e){toast('Sign-in failed: '+(e.message||e));}
+}
+async function signOut(){
+  try{if(supa)await supa.auth.signOut();}catch(e){}
+  sbSession=null;state.cloudUserId=null;save();closeModal('authModal');updateAuthUI();toast('Signed out — notes stay on this device');
 }
 
 /* ======================= SHARED-LINK VIEWER ======================= */
@@ -894,12 +1059,15 @@ function boot(){
   $('#editor').addEventListener('drop',e=>{
     const files=e.dataTransfer&&e.dataTransfer.files;if(files&&files.length&&files[0].type.indexOf('image')===0){e.preventDefault();embedImageFile(files[0]);}
   });
-  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal('shareModal');closeModal('dataModal');}});
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal('shareModal');closeModal('dataModal');closeModal('authModal');}});
   window.addEventListener('hashchange',()=>{if(location.hash.indexOf('#doc=')===0)openSharedFromHash();else if($('#sharedView').classList.contains('on'))location.reload();});
   // installable-app (PWA): only active when hosted over http/https
   if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
     navigator.serviceWorker.register('service-worker.js').catch(()=>{});
   }
+  // cloud sync: restore a saved session / handle Google redirect (non-blocking)
+  updateAuthUI();
+  ensureSupa();
 }
 boot();
 </script>
