@@ -372,9 +372,9 @@ const LS='scribbly_v2';
    another user's data. The real secret (service_role) is never used here. */
 const SB_URL='https://sookqeqvhgzlgcvswjqo.supabase.co';
 const SB_KEY='sb_publishable_Y2CsyCrwucyWgozzzckE_Q_hr0bLow4';
-let state={tree:null,active:null,expanded:{},theme:'notebook',font:'hand',mode:'split',cloudUserId:null,dirty:false,updatedAt:0};
+let state={tree:null,active:null,expanded:{},theme:'notebook',font:'hand',mode:'split',cloudUserId:null,dirty:false,updatedAt:0,images:{}};
 let dragId=null;
-let supa=null,sbSession=null,pushTimer=null;
+let supa=null,sbSession=null,pushTimer=null,authCfg=null;
 const CRAY=['#e04f3d','#2f80d8','#37a35a','#8b53c6','#ef9e33','#1fa79c','#e5589b'];
 
 const $=s=>document.querySelector(s);
@@ -460,7 +460,10 @@ function inlineFmt(s){
   s=escapeHtml(s);
   const codes=[];
   s=s.replace(/`([^`]+)`/g,(m,c)=>{codes.push(c);return ''+(codes.length-1)+'';});
-  s=s.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g,'<img alt="$1" src="$2">');
+  s=s.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g,(m,alt,src)=>{
+    if(src.indexOf('img:')===0){const d=state.images&&state.images[src.slice(4)];return d?'<img alt="'+alt+'" src="'+d+'">':'';}
+    return '<img alt="'+alt+'" src="'+src+'">';
+  });
   s=s.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
   s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_]+)__/g,'<strong>$1</strong>');
   s=s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
@@ -717,8 +720,10 @@ function embedImageFile(file){
       cv.getContext('2d').drawImage(img,0,0,w,h);
       let url;try{url=cv.toDataURL('image/jpeg',0.82);}catch(e){url=rd.result;}
       if(url.length>2600000){toast('That image is large — it may not save. Try a smaller one.');}
-      insertAtCursor('\n\n![diagram]('+url+')\n\n');
-      toast('Image added — it shows framed in the formatted view ✨');
+      const id=uid();state.images[id]=url;                 // keep the big data off the editor text
+      insertAtCursor('\n![image](img:'+id+')\n');           // short, clean token; renders as the picture on the right
+      touch();
+      toast('Image added — it shows in the formatted view ✨');
     };
     img.src=rd.result;
   };
@@ -867,9 +872,14 @@ async function ensureSupa(){
       if(session){ if(!sbSession)onSignedIn(session); else sbSession=session; }
       else { sbSession=null;state.cloudUserId=null;save();updateAuthUI(); }
     });
+    // discover which sign-in methods this project actually has enabled,
+    // so we never send the user to a broken "provider is not enabled" page
+    fetch(SB_URL+'/auth/v1/settings',{headers:{apikey:SB_KEY}}).then(r=>r.json())
+      .then(s=>{authCfg=s;if($('#authModal').classList.contains('on'))renderAuthModal();}).catch(()=>{});
     return supa;
   }catch(e){toast('Cloud unavailable (offline?) — notes stay on this device');return null;}
 }
+function googleOn(){return authCfg&&authCfg.external?authCfg.external.google!==false:null;}
 async function pullRow(){
   const {data,error}=await supa.from('workspaces').select('data,updated_at').eq('user_id',sbSession.user.id).maybeSingle();
   if(error)throw error;return data;
@@ -879,14 +889,15 @@ async function pushWorkspace(){
   setSyncState('saving');
   try{
     const ts=new Date().toISOString();
-    const {error}=await supa.from('workspaces').upsert({user_id:sbSession.user.id,data:{tree:state.tree,expanded:state.expanded},updated_at:ts});
+    const {error}=await supa.from('workspaces').upsert({user_id:sbSession.user.id,data:{tree:state.tree,expanded:state.expanded,images:state.images},updated_at:ts});
     if(error)throw error;
     state.dirty=false;save();setSyncState('synced');
   }catch(e){setSyncState('error');}
 }
 function schedulePush(){if(!supa||!sbSession)return;setSyncState('saving');clearTimeout(pushTimer);pushTimer=setTimeout(pushWorkspace,1400);}
 function loadCloud(cloud){
-  state.tree=cloud.tree;state.expanded=cloud.expanded||{};state.active=null;state.dirty=false;state.cloudUserId=sbSession.user.id;
+  state.tree=cloud.tree;state.expanded=cloud.expanded||{};state.images=Object.assign({},state.images,cloud.images||{});
+  state.active=null;state.dirty=false;state.cloudUserId=sbSession.user.id;
   save();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();
 }
 async function onSignedIn(session){
@@ -933,11 +944,15 @@ function renderAuthModal(){
       '<div class="auth-in"><button class="btn-primary" onclick="signOut()">Sign out</button>'+
       '<button class="auth-guest" onclick="closeModal(\'authModal\')">Keep working</button></div>';
   }else{
+    const g=googleOn();
+    const googleBtn = g===false
+      ? ''   // Google not enabled in this Supabase project — hide it so nobody hits the error page
+      : '<button class="btn-google" onclick="signInGoogle()"><span style="font-size:18px">🇬</span> Continue with Google</button>'+
+        '<div class="auth-div">or with email</div>';
     box.innerHTML='<h3>Sign in to sync</h3>'+
       '<div class="sub">Your folders &amp; files follow you to any computer or phone. Free, and your notes are private to you.</div>'+
       '<div class="auth-in">'+
-        '<button class="btn-google" onclick="signInGoogle()"><span style="font-size:18px">🇬</span> Continue with Google</button>'+
-        '<div class="auth-div">or with email</div>'+
+        googleBtn+
         '<input id="authEmail" type="email" placeholder="you@email.com" autocomplete="username" spellcheck="false">'+
         '<input id="authPass" type="password" placeholder="password" autocomplete="current-password">'+
         '<button class="btn-primary" id="authGo" onclick="signInEmail(authMode)">Sign in</button>'+
@@ -955,6 +970,7 @@ function setAuthMode(m){
 }
 async function signInGoogle(){
   const c=await ensureSupa();if(!c){toast('Cloud unavailable');return;}
+  if(googleOn()===false){toast('Google sign-in isn’t enabled in Supabase yet — use email, or enable Google in your project');return;}
   const {error}=await c.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
   if(error)toast(error.message);
 }
