@@ -140,6 +140,8 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 .mode-write #previewWrap{display:none}
 .mode-write #editorWrap{border-right:none}
 .mode-read #editorWrap{display:none}
+/* Read mode is the whole page — not a column hugging the left edge */
+.mode-read #preview{max-width:none; padding:14px 66px 150px 66px}
 
 #status{display:flex; align-items:center; gap:16px; padding:6px 18px; border-top:2.5px dashed var(--line2);
   font-family:var(--font-clean); font-size:12.5px; color:var(--muted)}
@@ -161,11 +163,23 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 #preview del{color:var(--muted)}
 #preview a{color:var(--link); text-decoration:underline wavy var(--link) 1px; text-underline-offset:3px}
 #preview mark{background:linear-gradient(105deg,transparent 2%,var(--mark) 2% 98%,transparent 98%); color:inherit; padding:.05em .15em}
-#preview ul,#preview ol{margin:.5em 0; padding-left:1.6em; line-height:1.75; font-size:1.12rem}
+#fmtBar{position:sticky; top:31px; z-index:3; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  padding:6px 22px 7px 66px; background:var(--paper); border-bottom:1px dashed var(--line)}
+#fmtBar button{font-family:var(--font-clean); font-size:12.5px; line-height:1; color:var(--ink);
+  background:var(--paper2); border:2px solid var(--ink); border-radius:9px 4px 9px 4px/4px 9px 4px 9px;
+  padding:6px 10px; min-height:30px; box-shadow:1.5px 1.5px 0 var(--line2); transition:.12s; cursor:pointer}
+#fmtBar button:hover{transform:translate(-1px,-1px); box-shadow:2.5px 2.5px 0 var(--accent); color:var(--accent)}
+#fmtBar button:active{transform:translate(1px,1px); box-shadow:none}
+.fmt-sep{width:1px; height:20px; background:var(--line2); margin:0 3px}
+@media(max-width:760px){#fmtBar{padding-left:22px} #fmtBar button{min-height:38px; padding:8px 11px}}
+#undoBtn,#redoBtn{font-size:19px; line-height:1; min-width:38px}
+#undoBtn[disabled],#redoBtn[disabled]{opacity:.32; cursor:default; box-shadow:none; transform:none}
+#preview ul,#preview ol{margin:.5em 0; padding-left:2.4em; line-height:1.75; font-size:1.12rem}
 #preview li{margin:.18em 0}
 #preview ol{list-style:none; counter-reset:none}
-#preview ol li{position:relative; padding-left:.2em}
-#preview ol li::before{content:attr(data-n); position:absolute; left:-1.5em; width:1.3em; text-align:right;
+#preview ol li{position:relative; padding-left:.35em}
+/* marker sits in its own gutter with real breathing room — "1." must never touch the text */
+#preview ol li::before{content:attr(data-n); position:absolute; left:-2.05em; width:1.6em; text-align:right;
   color:var(--accent); font-family:var(--font-head); font-size:1.2em; font-weight:700}
 #preview ul{list-style:none; padding-left:1.5em}
 #preview ul li{position:relative}
@@ -183,7 +197,10 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 #preview code{font-family:'Gochi Hand',monospace; background:var(--code-bg); color:var(--code-ink); padding:.05em .4em; border-radius:6px; font-size:1.02rem}
 #preview pre.cb{background:var(--code-bg); border:2.5px solid var(--ink); border-radius:16px 220px 18px 240px/230px 16px 210px 14px;
   padding:14px 18px; overflow:auto; margin:.85em 0; box-shadow:var(--shadow-sm)}
-#preview pre.cb code{background:none; padding:0; color:var(--ink); font-size:1rem; line-height:1.6; display:block}
+/* block code is monospace on purpose — indentation and brackets only line up in a fixed-width face */
+#preview pre.cb code{background:none; padding:0; color:var(--ink); font-size:.94rem; line-height:1.65; display:block;
+  white-space:pre; tab-size:4; font-variant-ligatures:none;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace}
 #preview hr{border:none; height:8px; margin:1.4em 0; background:no-repeat center/100% 8px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='8'%3E%3Cpath d='M1 5 Q 25 1 50 4 T 99 3' fill='none' stroke='%23bbb' stroke-width='2'/%3E%3C/svg%3E")}
 #preview img{max-width:100%; border-radius:12px; border:2.5px solid var(--ink); box-shadow:var(--shadow-sm)}
@@ -260,7 +277,11 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
   #editorWrap{border-right:none; border-bottom:2.5px dashed var(--line2)}
   #scrim{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:39; display:none}
   #scrim.on{display:block}
+  /* touch targets: phones have no Ctrl+Z, so these buttons are the only undo */
+  #undoBtn,#redoBtn{min-width:44px; min-height:44px; font-size:21px}
+  .mode-read #preview{padding:14px 20px 120px 20px}
 }
+@media(hover:none){#undoBtn,#redoBtn{min-width:44px; min-height:44px}}
 </style>
 
 <div id="app">
@@ -290,6 +311,8 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
         <button data-mode="write" onclick="setMode('write')">Write</button>
         <button data-mode="read" onclick="setMode('read')">Read</button>
       </div>
+      <button class="icon-btn" id="undoBtn" onclick="undoEdit()" title="Undo" aria-label="Undo" disabled>↶</button>
+      <button class="icon-btn" id="redoBtn" onclick="redoEdit()" title="Redo" aria-label="Redo" disabled>↷</button>
       <button class="tbtn" onclick="toggleFont()" id="fontBtn">✍️ Handwritten</button>
       <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Theme">🌙</button>
       <button class="icon-btn" onclick="pickDiagramImage()" title="Screenshot → hand-drawn diagram (AI)">🪄</button>
@@ -301,6 +324,16 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
       <div id="editorWrap">
         <div class="pane-label">✏️ Your notes — just type
           <button id="micBtn" onclick="toggleMic()" title="Voice typing — dictates at your cursor">🎤 Speak</button>
+        </div>
+        <div id="fmtBar" role="toolbar" aria-label="Formatting">
+          <button onclick="applyLineFormat('ul')" title="Bullet list — select lines, then click">• List</button>
+          <button onclick="applyLineFormat('ol')" title="Numbered list — select lines, then click">1. List</button>
+          <button onclick="applyLineFormat('task')" title="Checkbox list — select lines, then click">☑ Tasks</button>
+          <span class="fmt-sep"></span>
+          <button onclick="applyInline('bold')" title="Bold" style="font-weight:800">B</button>
+          <button onclick="applyInline('italic')" title="Italic" style="font-style:italic">I</button>
+          <button onclick="applyInline('mark')" title="Highlight">▮</button>
+          <button onclick="applyInline('code')" title="Code">&lt;/&gt;</button>
         </div>
         <textarea id="editor" spellcheck="true" placeholder="Start typing…&#10;&#10;• First line becomes the title&#10;• ALL CAPS or a line ending with : becomes a heading&#10;• - bullet   1. numbered   - [ ] checkbox&#10;• **bold**  *italic*  ==highlight==  > quote&#10;• Draw a flow:  Start -> Validate -> Save -> Done"></textarea>
       </div>
@@ -334,10 +367,28 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
     <h3>Keep your notes safe</h3>
     <div class="sub">Notes auto-save in this browser. To keep them if you clear your browser or switch devices, save a backup file.</div>
     <div class="rowbtns">
-      <button onclick="backupData()">💾 Save backup to my device<small>Downloads a scribbly-backup.json with every folder &amp; file</small></button>
+      <button onclick="exportAllZip()">📦 Download ALL my notes (.zip)<small>Real folders &amp; files — each note as a print-ready document (looks like Read mode, pictures included) plus a plain .txt</small></button>
+      <button onclick="printAllPDF()">📄 Save ALL notes as one PDF<small>Every note, each on its own page — pick “Save as PDF” in the print box</small></button>
+      <button onclick="backupData()">💾 Save backup to my device<small>One scribbly-backup.json with every folder, file &amp; image — use this to restore</small></button>
       <button onclick="restorePick()">📂 Restore from a backup file<small>Load a scribbly-backup.json — replaces current notes</small></button>
       <button onclick="closeModal('dataModal');openShare()">📤 Export one note as a webpage<small>A single .html that opens the same everywhere</small></button>
     </div>
+    <div class="sub" style="margin-top:14px"><b>🎤 Voice typing</b><br>Pick the accent you speak — it makes recognition noticeably more accurate. Shortcut: <b id="micHint">Ctrl+Shift+Space</b> to start/stop, <b>Esc</b> to stop.</div>
+    <select id="voiceLang" onchange="saveVoiceLang()" style="width:100%;margin-top:6px;font-family:var(--font-clean);font-size:13px;padding:9px 10px;color:var(--ink);background:var(--paper2);border:2.5px solid var(--ink);border-radius:12px;outline:none">
+      <option value="">Use my device language</option>
+      <option value="en-IN">English (India)</option>
+      <option value="en-US">English (US)</option>
+      <option value="en-GB">English (UK)</option>
+      <option value="en-AU">English (Australia)</option>
+      <option value="hi-IN">हिन्दी (Hindi)</option>
+      <option value="te-IN">తెలుగు (Telugu)</option>
+      <option value="ta-IN">தமிழ் (Tamil)</option>
+      <option value="kn-IN">ಕನ್ನಡ (Kannada)</option>
+      <option value="ml-IN">മലയാളം (Malayalam)</option>
+      <option value="mr-IN">मराठी (Marathi)</option>
+      <option value="bn-IN">বাংলা (Bengali)</option>
+      <option value="gu-IN">ગુજરાતી (Gujarati)</option>
+    </select>
     <div class="sub" style="margin-top:14px"><b>🪄 Screenshot → hand-drawn diagram</b><br>Paste an Anthropic API key to turn a diagram photo into a sketched flow. It's stored only in this browser and used only for your requests.</div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <input id="aiKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;font-family:var(--font-clean);font-size:13px;padding:9px 10px;color:var(--ink);background:var(--paper2);border:2.5px solid var(--ink);border-radius:12px;outline:none">
@@ -476,6 +527,39 @@ function inlineFmt(s){
 }
 function splitRow(line){return line.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());}
 const ORD=/^\s*(\d+)[.)](?=\s|[^\d\s])/;                 // 1. / 1) / 2.sliding (but not 3.5)
+/* "1 first item" with no dot — only counts as a list when several stack up (see loose run below) */
+const ORD_LOOSE=/^\s*(\d+)[ \t]+(\S.*)$/;
+function looseOrdRun(lines,i){
+  const run=[];let j=i,prev=null;
+  while(j<lines.length){
+    const m=lines[j].match(ORD_LOOSE);
+    if(!m)break;
+    const n=+m[1];
+    if(prev!==null&&n!==prev+1)break;                    // must be 1,2,3… to be a list
+    run.push([m[1],m[2]]);prev=n;j++;
+  }
+  return run.length>=2?run:null;                          // one stray "2 apples" stays prose
+}
+/* looks like source code rather than prose? */
+function codeLike(l){
+  if(!l.trim())return false;
+  if(/^[ \t]{2,}\S/.test(l))return true;                              // indented
+  if(/[{};]\s*$/.test(l))return true;                                 // ends with { } ;
+  if(/^\s*[}\])]+[;,]?\s*$/.test(l))return true;                      // closing bracket line
+  // a code keyword only counts with code punctuation too, so prose like
+  // "If you delete a middle element…" or "For every company…" stays prose
+  if(/^\s*(class|interface|public|private|protected|static|final|void|int|long|float|double|char|bool(ean)?|String|const|let|var|function|def|lambda|import|export|return|if|else|elif|for|while|switch|case|try|catch|except|finally|struct|enum|package|new|async|await|#include|using)\b/.test(l)
+     &&/[(){}[\];=<>]/.test(l))return true;
+  if(/^\s*[\w$.]+\s*\([^)]*\)\s*[;{]?\s*$/.test(l))return true;       // foo(bar);
+  if(/^\s*[\w$.[\]]+\s*[-+*/]?=\s*.+;\s*$/.test(l))return true;       // x = y;
+  return false;
+}
+/* strip the shared leading indent so a pasted block isn't pushed off the page */
+function dedent(ls){
+  let min=Infinity;
+  ls.forEach(l=>{if(l.trim()){const w=(l.match(/^[ \t]*/)||[''])[0].length;if(w<min)min=w;}});
+  return (!isFinite(min)||!min)?ls:ls.map(l=>l.slice(min));
+}
 function isSpecial(l){
   return /^\s*(#{1,6}\s|[-*+]\s|>\s?|```|([-*_])\2\2)/.test(l)||ORD.test(l)||/^\s*$/.test(l)||l.indexOf('|')>-1||isArrowLine(l);
 }
@@ -535,6 +619,21 @@ function render(text,auto=true){
       }
       out.push('<ol>'+buf.join('')+'</ol>');continue;
     }
+    // "1 first item / 2 second item" — a list even without the dot
+    if(auto&&!codeLike(line)){
+      const run=looseOrdRun(lines,i);
+      if(run){out.push('<ol>'+run.map(p=>'<li data-n="'+p[0]+'.">'+inlineFmt(p[1].trim())+'</li>').join('')+'</ol>');i+=run.length;continue;}
+    }
+    // indented / brace-y block -> real code box, indentation preserved
+    if(auto&&codeLike(line)){
+      let j=i;const buf=[];
+      const blankThenCode=k=>{let z=k+1;while(z<lines.length&&!lines[z].trim())z++;return z<lines.length&&codeLike(lines[z]);};
+      while(j<lines.length&&(codeLike(lines[j])||(!lines[j].trim()&&blankThenCode(j)))){buf.push(lines[j]);j++;}
+      if(buf.filter(b=>b.trim()).length>=2){
+        out.push('<pre class="cb"><code>'+escapeHtml(dedent(buf).join('\n'))+'</code></pre>');
+        i=j;continue;
+      }
+    }
     if(line.indexOf('|')>-1&&i+1<lines.length&&/-/.test(lines[i+1])&&/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i+1])){
       const header=splitRow(line);i+=2;const rows=[];
       while(i<lines.length&&lines[i].indexOf('|')>-1&&!/^\s*$/.test(lines[i])){rows.push(splitRow(lines[i]));i++;}
@@ -552,7 +651,7 @@ function render(text,auto=true){
     }
     // paragraph: keep each line as a soft break
     const buf=[line];i++;
-    while(i<lines.length&&!isSpecial(lines[i])&&!(auto&&headingLike(lines[i].trim()))){buf.push(lines[i]);i++;}
+    while(i<lines.length&&!isSpecial(lines[i])&&!(auto&&headingLike(lines[i].trim()))&&!(auto&&codeLike(lines[i]))){buf.push(lines[i]);i++;}
     out.push('<p>'+buf.map(l=>inlineFmt(l.trim())).join('<br>')+'</p>');
   }
   return out.join('\n');
@@ -640,68 +739,261 @@ function moveNode(id,folderId){
 }
 function toggleFolder(id){state.expanded[id]=!state.expanded[id];save();renderTree();}
 function openFile(id){
+  flushSave();                       // don't lose an edit that is still debouncing
   const f=find(id);if(!f||f.node.type!=='file')return;
   state.active=id;$('#fileTitle').value=f.node.name;$('#editor').value=f.node.content||'';
+  histSeed(id,f.node.content||'');histPrune(id);updateUndoUI();
   updatePreview();save();renderTree();
   if(window.innerWidth<=760)toggleSidebar(false);
 }
 function clearEditor(){$('#editor').value='';$('#fileTitle').value='';$('#preview').innerHTML='<div class="doc-empty">Pick a file or create one to start writing ✎</div>';$('#counts').textContent='0 words · 0 chars';}
 
 /* ---------- editor wiring ---------- */
-let saveTimer;
+let saveTimer=null,pendingSave=null;
+/* write an edit to the note it was actually typed into — never to whatever
+   file happens to be open when the debounce timer finally fires */
+function commitEdit(id,val){
+  const f=id?find(id):null;
+  if(f&&f.node.type==='file'&&f.node.content!==val){f.node.content=val;save();touch();}
+  else save();
+  const st=$('#saveState');if(st){st.textContent='● saved';st.classList.add('saved');}
+}
+/* force any in-flight edit to disk right now (before switching files, backing up, closing) */
+function flushSave(){
+  if(!pendingSave)return;
+  clearTimeout(saveTimer);saveTimer=null;
+  const p=pendingSave;pendingSave=null;commitEdit(p.id,p.val);
+}
 function onEdit(){
+  histRecord(true);
   updatePreview();
+  queueSave(350);
+}
+/* schedule the debounced write without touching the preview */
+function queueSave(ms){
   const st=$('#saveState');st.textContent='● saving…';st.classList.remove('saved');
+  pendingSave={id:state.active,val:$('#editor').value};   // captured NOW, not 350ms later
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{if(state.active){const f=find(state.active);if(f)f.node.content=$('#editor').value;}save();touch();st.textContent='● saved';st.classList.add('saved');},350);
+  saveTimer=setTimeout(()=>{const p=pendingSave;pendingSave=null;saveTimer=null;if(p)commitEdit(p.id,p.val);},ms);
 }
 function updatePreview(){
   const v=$('#editor').value;
-  $('#preview').innerHTML=v.trim()?render(v):'<div class="doc-empty">Your formatted note appears here ✨</div>';
   const words=(v.trim().match(/\S+/g)||[]).length;
   $('#counts').textContent=words+' words · '+v.length+' chars';
+  if(!v.trim()){$('#preview').innerHTML='<div class="doc-empty">Your formatted note appears here ✨</div>';return;}
+  // a formatting error must never leave the previous note's text on screen
+  try{$('#preview').innerHTML=render(v);}
+  catch(e){
+    console.error('Scribbly: format failed, showing plain text',e);
+    $('#preview').innerHTML='<pre class="cb"><code>'+escapeHtml(v)+'</code></pre>';
+  }
+}
+const IS_MAC=/Mac|iPhone|iPad|iPod/.test(navigator.platform||navigator.userAgent);
+function modKeyName(){return IS_MAC?'⌘':'Ctrl';}
+/* ======================= UNDO / REDO =======================
+   The app rewrites the textarea's .value directly (lists, voice, images, Tab),
+   which wipes the browser's own undo stack — so we keep our own, per note.
+   One shared implementation means Mac, Windows, Linux, phone and tablet all
+   behave identically instead of depending on what the browser kept. */
+const HIST={},HIST_MAX=100,HIST_FILES=8;let histLock=false;
+function histFor(id){if(!HIST[id])HIST[id]={s:[],i:-1,t:0};HIST[id].u=Date.now();return HIST[id];}
+function histSeed(id,text){const h=histFor(id);if(!h.s.length){h.s=[{v:text||'',a:0,b:0}];h.i=0;h.t=0;}}
+function histRecord(coalesce){
+  if(histLock||!state.active)return;
+  const ta=$('#editor'),h=histFor(state.active),now=Date.now();
+  const snap={v:ta.value,a:ta.selectionStart,b:ta.selectionEnd};
+  if(h.i>=0&&h.s[h.i].v===snap.v){h.s[h.i].a=snap.a;h.s[h.i].b=snap.b;return;}
+  if(coalesce&&h.i>=0&&now-h.t<600){h.s[h.i]=snap;h.t=now;updateUndoUI();return;} // one burst of typing = one undo
+  h.s=h.s.slice(0,h.i+1);h.s.push(snap);
+  if(h.s.length>HIST_MAX)h.s.shift();
+  h.i=h.s.length-1;h.t=now;updateUndoUI();
+}
+function histGo(dir){
+  if(!state.active)return false;
+  const h=histFor(state.active),ni=h.i+dir;
+  if(ni<0||ni>=h.s.length)return false;
+  h.i=ni;h.t=0;
+  const ta=$('#editor'),s=h.s[ni];
+  histLock=true;
+  ta.value=s.v;
+  try{ta.focus();ta.selectionStart=s.a;ta.selectionEnd=s.b;}catch(e){}
+  onEdit();
+  histLock=false;updateUndoUI();return true;
+}
+function undoEdit(){if(!histGo(-1))toast('Nothing to undo');}
+function redoEdit(){if(!histGo(1))toast('Nothing to redo');}
+function updateUndoUI(){
+  const h=state.active?HIST[state.active]:null;
+  const u=$('#undoBtn'),r=$('#redoBtn');
+  if(u)u.disabled=!h||h.i<=0;
+  if(r)r.disabled=!h||h.i>=h.s.length-1;
+}
+/* only the few notes you've actually been editing keep a history in memory */
+function histPrune(keepId){
+  const ids=Object.keys(HIST);
+  if(ids.length<=HIST_FILES)return;
+  ids.filter(k=>k!==keepId).sort((a,b)=>(HIST[a].u||0)-(HIST[b].u||0))
+     .slice(0,ids.length-HIST_FILES).forEach(k=>delete HIST[k]);
+}
+/* ======================= FORMAT BAR =======================
+   Select some lines, press a button — exactly like Word or Docs.
+   Pressing the same button again strips the markers back off. */
+const MARK_RE={
+  ul:/^\s*[-*+][ \t]+(?!\[[ xX]\][ \t])/,
+  task:/^\s*[-*+][ \t]+\[[ xX]\][ \t]+/,
+  ol:/^\s*\d+[.)][ \t]+/
+};
+function stripMarker(l){return l.replace(/^([ \t]*)(?:[-*+][ \t]+(?:\[[ xX]\][ \t]+)?|\d+[.)][ \t]+)/,'$1');}
+/* expand the selection out to whole lines, then re-marker each one */
+function applyLineFormat(kind){
+  const ta=$('#editor');
+  if(!state.active){toast('Open a note first');return;}
+  const v=ta.value;
+  let s=ta.selectionStart,e=ta.selectionEnd;
+  const ls=v.lastIndexOf('\n',s-1)+1;
+  if(e>s&&v[e-1]==='\n')e--;                       // a trailing newline isn't another line
+  let le=v.indexOf('\n',e);if(le===-1)le=v.length;
+  const lines=v.slice(ls,le).split('\n');
+  const real=lines.filter(l=>l.trim());
+  if(!real.length){toast('Select the lines you want to list');return;}
+  const allMarked=real.every(l=>MARK_RE[kind].test(l));
+  let n=0;
+  const outLines=lines.map(l=>{
+    if(!l.trim())return l;                          // leave blank lines alone
+    const base=stripMarker(l);
+    const ind=(base.match(/^[ \t]*/)||[''])[0],body=base.slice(ind.length);
+    if(allMarked)return base;                       // toggle off
+    n++;
+    return ind+(kind==='ul'?'- ':kind==='task'?'- [ ] ':n+'. ')+body;
+  });
+  const rep=outLines.join('\n');
+  ta.value=v.slice(0,ls)+rep+v.slice(le);
+  ta.focus();
+  try{ta.selectionStart=ls;ta.selectionEnd=ls+rep.length;}catch(err){}
+  histRecord(false);onEdit();
+}
+/* wrap the selection in **bold**, *italic*, ==highlight== or `code` */
+function applyInline(kind){
+  const ta=$('#editor');
+  if(!state.active){toast('Open a note first');return;}
+  const w={bold:'**',italic:'*',mark:'==',code:'`'}[kind];if(!w)return;
+  const v=ta.value,s=ta.selectionStart,e=ta.selectionEnd;
+  ta.focus();
+  if(s===e){
+    ta.value=v.slice(0,s)+w+w+v.slice(e);
+    try{ta.selectionStart=ta.selectionEnd=s+w.length;}catch(err){}
+  }else{
+    const sel=v.slice(s,e);
+    const on=sel.length>=w.length*2&&sel.startsWith(w)&&sel.endsWith(w);
+    const rep=on?sel.slice(w.length,-w.length):w+sel+w;   // press again to remove
+    ta.value=v.slice(0,s)+rep+v.slice(e);
+    try{ta.selectionStart=s;ta.selectionEnd=s+rep.length;}catch(err){}
+  }
+  histRecord(false);onEdit();
+}
+/* ---------- auto-continuing lists (like Word / Notepad / Docs) ----------
+   Enter on a bullet, checkbox or numbered line starts the next one for you.
+   Enter on an empty marker ends the list instead of adding a dead bullet. */
+const LIST_LINE=/^([ \t]*)(?:([-*+])|(\d+)([.)]))([ \t]+)(\[[ xX]\][ \t]+)?(.*)$/;
+function continueList(e){
+  const t=e.target,pos=t.selectionStart;
+  if(pos!==t.selectionEnd)return;                       // a selection: let Enter replace it
+  const before=t.value.slice(0,pos);
+  const ls=before.lastIndexOf('\n')+1;
+  const m=before.slice(ls).match(LIST_LINE);
+  if(!m)return;
+  const [,indent,bullet,num,sep,gap,box,rest]=m;
+  e.preventDefault();
+  let ins;
+  if(!rest.trim()){                                     // empty item -> finish the list
+    t.value=t.value.slice(0,ls)+t.value.slice(pos);
+    t.selectionStart=t.selectionEnd=ls;
+    onEdit();return;
+  }
+  const marker=bullet?bullet:(String(+num+1)+sep);
+  ins='\n'+indent+marker+gap+(box?box.replace(/[xX]/,' '):'');
+  t.value=t.value.slice(0,pos)+ins+t.value.slice(pos);
+  t.selectionStart=t.selectionEnd=pos+ins.length;
+  histRecord(false);onEdit();                           // its own undo step
 }
 /* insert text at the textarea caret (used by voice + images) */
 function insertAtCursor(text){
   const ta=$('#editor');const s=ta.selectionStart||0,e=ta.selectionEnd||0;
   ta.value=ta.value.slice(0,s)+text+ta.value.slice(e);
-  const c=s+text.length;ta.selectionStart=ta.selectionEnd=c;ta.focus();onEdit();
+  const c=s+text.length;ta.selectionStart=ta.selectionEnd=c;ta.focus();
+  histRecord(false);onEdit();
 }
 
 /* ======================= VOICE TYPING ======================= */
-let recog=null,recording=false,micBefore='',micAfter='',micFinal='';
-function updateMicUI(){const b=$('#micBtn');if(!b)return;b.classList.toggle('rec',recording);b.textContent=recording?'⏹ Stop':'🎤 Speak';}
-function stopMic(){recording=false;if(recog){try{recog.stop();}catch(e){}}updateMicUI();}
+let recog=null,recording=false,micBefore='',micAfter='',micPrevTimer=null,micRestart=null;
+function micLang(){
+  // en-IN (or whatever the device is set to) recognises local names and accents
+  // far better than a hard-coded en-US ever did
+  return localStorage.getItem('scribbly_voice_lang')||navigator.language||'en-US';
+}
+function updateMicUI(){
+  const b=$('#micBtn');if(!b)return;
+  b.classList.toggle('rec',recording);
+  b.textContent=recording?'⏹ Stop':'🎤 Speak';
+  b.title=recording?'Stop dictating (Esc)':'Voice typing — dictates at your cursor ('+modKeyName()+'+Shift+Space)';
+}
+function stopMic(){
+  recording=false;
+  clearTimeout(micRestart);micRestart=null;
+  if(recog){try{recog.stop();}catch(e){}}
+  updateMicUI();
+}
+/* redraw the formatted pane at most a few times a second while dictating —
+   rendering the whole document on every interim word is what made it crawl */
+function micTick(){
+  const ta=$('#editor');
+  const words=(ta.value.trim().match(/\S+/g)||[]).length;
+  $('#counts').textContent=words+' words · '+ta.value.length+' chars';
+  queueSave(700);
+  if(!micPrevTimer)micPrevTimer=setTimeout(()=>{micPrevTimer=null;updatePreview();},450);
+}
 function toggleMic(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){toast('Voice typing needs Chrome, Edge, or Safari');return;}
   if(recording){stopMic();toast('Stopped ✓');return;}
+  if(!state.active){toast('Open a note first');return;}
   const ta=$('#editor');ta.focus();
+  histRecord(false);                                   // dictation is one undo step
   const pos=(ta.selectionStart==null)?ta.value.length:ta.selectionStart;
-  micBefore=ta.value.slice(0,pos);micAfter=ta.value.slice(pos);micFinal='';
-  recog=new SR();recog.lang='en-US';recog.interimResults=true;recog.continuous=true;
+  micBefore=ta.value.slice(0,pos);micAfter=ta.value.slice(pos);
+  recog=new SR();
+  recog.lang=micLang();recog.interimResults=true;recog.continuous=true;recog.maxAlternatives=1;
   recog.onstart=()=>{toast('Listening… speak now 🎤');};
   recog.onresult=e=>{
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       const r=e.results[i];
-      if(r.isFinal)micFinal+=r[0].transcript;else interim+=r[0].transcript;
+      // lock finals straight into the anchor: nothing accumulates, so a mid-session
+      // restart (Chrome does this on every pause) can't duplicate or drop text
+      if(r.isFinal)micBefore+=r[0].transcript;
+      else interim+=r[0].transcript;
     }
-    const ins=micFinal+interim;
-    ta.value=micBefore+ins+micAfter;
-    const c=micBefore.length+ins.length;ta.selectionStart=ta.selectionEnd=c;
-    onEdit();
+    ta.value=micBefore+interim+micAfter;
+    const c=micBefore.length+interim.length;
+    try{ta.selectionStart=ta.selectionEnd=c;}catch(err){}
+    micTick();
   };
   recog.onerror=ev=>{
     if(ev.error==='no-speech'||ev.error==='aborted')return;   // transient — keep going
+    if(ev.error==='network'){toast('Voice needs an internet connection');stopMic();return;}
     recording=false;updateMicUI();
     toast(ev.error==='not-allowed'||ev.error==='service-not-allowed'
       ? 'Microphone blocked — click the 🔒 in the address bar and allow the mic'
       : 'Voice error: '+ev.error);
   };
   recog.onend=()=>{
-    if(recording){try{recog.start();}catch(e){}}   // Chrome auto-stops on pauses — restart while active
-    else{onEdit();updateMicUI();}
+    if(recording){                                     // Chrome ends the session on pauses
+      clearTimeout(micRestart);
+      micRestart=setTimeout(()=>{if(recording){try{recog.start();}catch(e){}}},250);
+      return;
+    }
+    clearTimeout(micPrevTimer);micPrevTimer=null;
+    updatePreview();queueSave(200);histRecord(false);updateMicUI();
   };
   try{recog.start();recording=true;updateMicUI();}
   catch(e){recording=false;updateMicUI();toast('Could not start the microphone');}
@@ -775,7 +1067,7 @@ async function imageToDiagram(file){
 }
 
 /* ---------- top bar ---------- */
-function setMode(m){state.mode=m;$('#work').className='mode-'+m;$('#viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));save();}
+function setMode(m){state.mode=m;$('#work').className='mode-'+m;$('#viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));if(state.active)updatePreview();save();}
 function toggleTheme(){state.theme=state.theme==='notebook'?'blackboard':'notebook';applyTheme();save();}
 function applyTheme(){document.documentElement.setAttribute('data-theme',state.theme);$('#themeBtn').textContent=state.theme==='blackboard'?'📔':'🌙';}
 function toggleFont(){state.font=state.font==='hand'?'clean':'hand';applyFont();save();}
@@ -815,6 +1107,7 @@ function openShare(){
   if(navigator.share)items.push(['📱','Share…','shareNative']);
   items.push(['💬','WhatsApp','shareWA'],['✈️','Telegram','shareTG'],['✉️','Email','shareMail'],
              ['🔗','Copy link','shareCopyLink'],['📋','Copy text','shareCopyText'],
+             ['📄','Save as PDF','sharePrintPDF'],['📝','Download .txt','shareDownloadTXT'],
              ['🌐','Download page','shareDownloadHTML'],['⬇️','Download .md','shareDownloadMD']);
   $('#shareGrid').innerHTML=items.map(it=>'<button onclick="'+it[2]+'()"><span class="em">'+it[0]+'</span>'+it[1]+'</button>').join('');
   $('#shareModal').classList.add('on');
@@ -835,10 +1128,163 @@ function shareCopyLink(){copy(shareLink(),'Link copied — anyone with it sees y
 function shareCopyText(){copy($('#editor').value||'','Note text copied ✓');}
 function shareDownloadHTML(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.html',buildExportHTML(f.name,$('#editor').value),'text/html');toast('Webpage downloaded ✓');closeModal('shareModal');}
 function shareDownloadMD(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.md',$('#editor').value||'','text/markdown');toast('Markdown downloaded ✓');closeModal('shareModal');}
+function shareDownloadTXT(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.txt',plainText($('#editor').value||''),'text/plain');toast('Text file downloaded ✓');closeModal('shareModal');}
+function sharePrintPDF(){const f=currentFile();if(!f){toast('Open a file first');return;}closeModal('shareModal');printOne(f.name,$('#editor').value||'');}
+function printOne(name,content){
+  let body='';try{body=render(content);}catch(e){body='<pre class="cb"><code>'+escapeHtml(content)+'</code></pre>';}
+  const css=document.querySelector('style').textContent;
+  const w=window.open('','_blank');
+  if(!w){toast('Allow pop-ups for this site to print');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(name)+'</title>'+
+    '<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Gochi+Hand&display=swap" rel="stylesheet">'+
+    '<style>'+css+'body{background:var(--paper);font-family:var(--font-hand);margin:0}#preview{max-width:none;padding:26px 34px 40px}'+
+    '@media print{#preview pre.cb,#preview blockquote,#preview table,#preview img{break-inside:avoid;page-break-inside:avoid}@page{margin:14mm}}'+
+    '</style></head><body data-theme="notebook" data-font="'+state.font+'"><div id="preview">'+
+    '<h1 class="doc-h">'+escapeHtml(name)+'</h1>'+body+'</div></body></html>');
+  w.document.close();w.onload=()=>setTimeout(()=>{w.focus();w.print();},400);
+  toast('Choose “Save as PDF” in the print box ✓');
+}
 
 /* ======================= DATA / BACKUP ======================= */
-function openData(){const k=$('#aiKey');if(k)k.value=getAiKey();$('#dataModal').classList.add('on');}
-function backupData(){downloadFile('scribbly-backup.json',JSON.stringify({app:'scribbly',v:2,tree:state.tree,expanded:state.expanded},null,2),'application/json');toast('Backup saved ✓');}
+function saveVoiceLang(){
+  const v=$('#voiceLang').value;
+  if(v)localStorage.setItem('scribbly_voice_lang',v);else localStorage.removeItem('scribbly_voice_lang');
+  if(recording){stopMic();setTimeout(toggleMic,300);}     // apply straight away
+  toast('Voice language set ✓');
+}
+function openData(){
+  const k=$('#aiKey');if(k)k.value=getAiKey();
+  const vl=$('#voiceLang');if(vl)vl.value=localStorage.getItem('scribbly_voice_lang')||'';
+  const mh=$('#micHint');if(mh)mh.textContent=(IS_MAC?'⌘':'Ctrl')+'+Shift+Space';
+  $('#dataModal').classList.add('on');
+}
+function stamp(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes());}
+/* full-fidelity backup: tree + folder state + embedded images (images were missing before) */
+function backupData(){
+  flushSave();
+  downloadFile('scribbly-backup_'+stamp()+'.json',
+    JSON.stringify({app:'scribbly',v:3,tree:state.tree,expanded:state.expanded,images:state.images||{}},null,2),
+    'application/json');
+  toast('Backup saved ✓');
+}
+
+/* --- tiny ZIP writer (store method, no libraries) so "download everything" is one click --- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function zipBlob(files){
+  const enc=new TextEncoder(),parts=[],central=[];let off=0;
+  const d=new Date();
+  const tt=((d.getHours()&31)<<11)|((d.getMinutes()&63)<<5)|(Math.floor(d.getSeconds()/2)&31);
+  const dd=(((d.getFullYear()-1980)&127)<<9)|(((d.getMonth()+1)&15)<<5)|(d.getDate()&31);
+  for(const f of files){
+    const nb=enc.encode(f.name),crc=crc32(f.data),len=f.data.length;
+    const lh=new Uint8Array(30+nb.length),lv=new DataView(lh.buffer);
+    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,20,true);lv.setUint16(6,0x0800,true);lv.setUint16(8,0,true);
+    lv.setUint16(10,tt,true);lv.setUint16(12,dd,true);
+    lv.setUint32(14,crc,true);lv.setUint32(18,len,true);lv.setUint32(22,len,true);
+    lv.setUint16(26,nb.length,true);lv.setUint16(28,0,true);lh.set(nb,30);
+    parts.push(lh,f.data);
+    const ch=new Uint8Array(46+nb.length),cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,20,true);cv.setUint16(6,20,true);cv.setUint16(8,0x0800,true);
+    cv.setUint16(10,0,true);cv.setUint16(12,tt,true);cv.setUint16(14,dd,true);
+    cv.setUint32(16,crc,true);cv.setUint32(20,len,true);cv.setUint32(24,len,true);
+    cv.setUint16(28,nb.length,true);cv.setUint32(42,off,true);ch.set(nb,46);
+    central.push(ch);
+    off+=lh.length+len;
+  }
+  let cd=0;central.forEach(c=>cd+=c.length);
+  const eo=new Uint8Array(22),ev=new DataView(eo.buffer);
+  ev.setUint32(0,0x06054b50,true);ev.setUint16(8,central.length,true);ev.setUint16(10,central.length,true);
+  ev.setUint32(12,cd,true);ev.setUint32(16,off,true);
+  return new Blob(parts.concat(central,[eo]),{type:'application/zip'});
+}
+function safeName(s){return (s||'untitled').replace(/[\/\\:*?"<>|\x00-\x1f]/g,'-').replace(/\.+$/,'').slice(0,80)||'untitled';}
+/* walk every file in the tree, handing back its folder path */
+function eachNote(fn){
+  (function w(node,path){
+    (node.children||[]).forEach(c=>{
+      if(c.type==='folder')w(c,path+safeName(c.name)+'/');
+      else fn(c,path);
+    });
+  })(state.tree,'');
+}
+/* plain readable text — no markdown syntax, just the words */
+function plainText(src){
+  return (src||'').replace(/\r\n?/g,'\n')
+    .replace(/^\s*```.*$/gm,'')                       // drop fence lines
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g,(m,a)=>a?'[image: '+a+']':'[image]')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g,'$1 ($2)')
+    .replace(/^\s*[-*+]\s+\[ \]\s+/gm,'[ ] ')
+    .replace(/^\s*[-*+]\s+\[[xX]\]\s+/gm,'[x] ')
+    .replace(/^\s*[-*+]\s+/gm,'• ')
+    .replace(/\*\*([^*]+)\*\*/g,'$1').replace(/__([^_]+)__/g,'$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1$2')
+    .replace(/~~([^~]+)~~/g,'$1').replace(/==([^=]+)==/g,'$1')
+    .replace(/`([^`]+)`/g,'$1')
+    .replace(/^\s*(#{1,6})\s+/gm,'')
+    .replace(/\n{4,}/g,'\n\n\n');
+}
+/* one note as a standalone, print-ready page that looks exactly like Read mode */
+function noteDocHTML(name,content){
+  return buildExportHTML(name,content).replace('<div id="preview" class="sheet">',
+    '<div id="preview" class="sheet"><h1 class="doc-h">'+escapeHtml(name)+'</h1>');
+}
+/* EVERYTHING: real folders, a print-ready document + a plain .txt per note */
+function exportAllZip(){
+  flushSave();
+  const enc=new TextEncoder(),files=[],used={};let n=0;
+  eachNote((c,path)=>{
+    let base=path+safeName(c.name).replace(/\.(md|txt|html)$/i,'');
+    if(used[base]){used[base]++;base+=' ('+used[base]+')';}else used[base]=1;
+    files.push({name:base+'.html',data:enc.encode(noteDocHTML(c.name,c.content||''))});
+    files.push({name:base+'.txt', data:enc.encode(plainText(c.content||''))});
+    n++;
+  });
+  if(!n){toast('No notes to export yet');return;}
+  files.push({name:'READ-ME first.txt',data:enc.encode(
+    'Scribbly export — '+new Date().toLocaleString()+'\n\n'+
+    'Your folders and notes are exactly as they are in the app.\n\n'+
+    'For every note you get two files:\n'+
+    '  • .html  — opens in any browser looking just like Read mode (pictures included).\n'+
+    '             To get a PDF: open it and press Ctrl+P / Cmd+P, then "Save as PDF".\n'+
+    '  • .txt   — the plain words, no formatting symbols.\n\n'+
+    'scribbly-backup.json restores everything back into the app\n'+
+    '(open Scribbly, go to the data menu, "Restore from a backup file").\n')});
+  files.push({name:'scribbly-backup.json',data:enc.encode(JSON.stringify({app:'scribbly',v:3,tree:state.tree,expanded:state.expanded,images:state.images||{}},null,2))});
+  const a=document.createElement('a');a.href=URL.createObjectURL(zipBlob(files));a.download='scribbly-notes_'+stamp()+'.zip';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast(n+' notes downloaded ✓');
+}
+/* one PDF containing every note, each starting on its own page */
+function printAllPDF(){
+  flushSave();
+  const parts=[];let n=0;
+  eachNote((c,path)=>{
+    let body='';
+    try{body=render(c.content||'');}catch(err){body='<pre class="cb"><code>'+escapeHtml(c.content||'')+'</code></pre>';}
+    parts.push('<section class="note-page"><div class="crumb">'+escapeHtml(path.replace(/\/$/,'')||'')+'</div>'+
+      '<h1 class="doc-h">'+escapeHtml(c.name)+'</h1>'+body+'</section>');
+    n++;
+  });
+  if(!n){toast('No notes to print yet');return;}
+  const css=document.querySelector('style').textContent;
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Scribbly notes</title>'+
+    '<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Gochi+Hand&display=swap" rel="stylesheet">'+
+    '<style>'+css+
+    'body{background:var(--paper);font-family:var(--font-hand);margin:0}'+
+    '#preview{max-width:none;padding:0}'+
+    '.note-page{padding:26px 34px 40px}'+
+    '.crumb{font-family:var(--font-clean);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}'+
+    '@media print{.note-page{break-after:page;page-break-after:always}.note-page:last-child{break-after:auto;page-break-after:auto}'+
+    '#preview pre.cb,#preview blockquote,#preview table,#preview img{break-inside:avoid;page-break-inside:avoid}'+
+    '@page{margin:14mm}}'+
+    '</style></head><body data-theme="notebook" data-font="'+state.font+'"><div id="preview">'+parts.join('')+'</div></body></html>';
+  const w=window.open('','_blank');
+  if(!w){toast('Allow pop-ups for this site to print');return;}
+  w.document.write(html);w.document.close();
+  w.onload=()=>setTimeout(()=>{w.focus();w.print();},450);
+  toast('Opening '+n+' notes — choose "Save as PDF" ✓');
+}
 function restorePick(){$('#restoreInput').click();}
 function restoreData(file){
   if(!file)return;const rd=new FileReader();
@@ -847,6 +1293,7 @@ function restoreData(file){
     if(!tree||!tree.children){toast('That file is not a Scribbly backup');return;}
     if(!confirm('Restore this backup? It replaces your current notes.'))return;
     state.tree=tree;state.expanded=data.expanded||{};state.active=null;
+    if(data.images)state.images=Object.assign({},state.images,data.images);
     save();touch();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();closeModal('dataModal');toast('Notes restored ✓');
   }catch(e){toast('Could not read that file');}};
   rd.readAsText(file);
@@ -862,16 +1309,55 @@ function setSyncState(s){
   else if(s==='error'){el.textContent='⚠ offline — saved on device';el.className='err';}
 }
 function cloneNode(n){const c={id:uid(),name:n.name,type:n.type};if(n.type==='folder')c.children=(n.children||[]).map(cloneNode);else c.content=n.content||'';return c;}
+/* did we just come back from a Google / magic-link redirect? */
+function hasAuthRedirect(){
+  return /[#&]access_token=|[#&]refresh_token=|[?&]code=|[#&]error_description=/.test(location.hash+location.search);
+}
+/* take the token out of the address bar once it has been used */
+function cleanAuthUrl(){
+  if(!hasAuthRedirect())return;
+  try{history.replaceState(null,'',location.pathname+location.search.replace(/[?&]code=[^&]*/,'').replace(/^&/,'?'));}
+  catch(e){location.hash='';}
+}
 async function ensureSupa(){
   if(supa)return supa;
   if(!SB_URL||!SB_KEY)return null;
+  const redirecting=hasAuthRedirect();
+  if(redirecting)setSyncState('saving');
+  let mod=null;
+  for(let attempt=0;attempt<2&&!mod;attempt++){
+    try{mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');}
+    catch(e){if(attempt)break;await new Promise(r=>setTimeout(r,900));}   // one retry: CDN blips shouldn't sign you out
+  }
+  if(!mod){
+    setSyncState('error');
+    toast(redirecting?'Could not reach the sign-in service — your notes are safe on this device'
+                    :'Cloud unavailable (offline?) — notes stay on this device');
+    return null;
+  }
   try{
-    const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    supa=mod.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    supa=mod.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,flowType:'implicit'}});
     supa.auth.onAuthStateChange((_ev,session)=>{
-      if(session){ if(!sbSession)onSignedIn(session); else sbSession=session; }
+      if(session){ if(!sbSession)onSignedIn(session); else {sbSession=session;updateAuthUI();} }
       else { sbSession=null;state.cloudUserId=null;save();updateAuthUI(); }
     });
+    // Don't trust the redirect being picked up implicitly — ask for the session
+    // outright, so a returning login can never leave you looking signed out.
+    (async()=>{
+      for(let i=0;i<6;i++){
+        try{
+          const {data}=await supa.auth.getSession();
+          if(data&&data.session){ if(!sbSession)await onSignedIn(data.session); cleanAuthUrl(); return; }
+        }catch(e){}
+        if(!redirecting)return;                       // nothing pending, normal signed-out start
+        await new Promise(r=>setTimeout(r,400));      // redirect in flight — give it a moment
+      }
+      if(redirecting){                                 // came back with a token but it never took
+        setSyncState('error');cleanAuthUrl();
+        toast('Sign-in did not complete — please try Sign in again');
+        updateAuthUI();
+      }
+    })();
     // discover which sign-in methods this project actually has enabled,
     // so we never send the user to a broken "provider is not enabled" page
     fetch(SB_URL+'/auth/v1/settings',{headers:{apikey:SB_KEY}}).then(r=>r.json())
@@ -884,8 +1370,13 @@ async function pullRow(){
   const {data,error}=await supa.from('workspaces').select('data,updated_at').eq('user_id',sbSession.user.id).maybeSingle();
   if(error)throw error;return data;
 }
+function treeFileCount(n){let c=0;walk(n||{},x=>{if(x&&x.type==='file')c++;});return c;}
 async function pushWorkspace(){
   if(!supa||!sbSession)return;
+  // SAFETY: never let a blank / half-booted session overwrite real notes in the cloud.
+  if(!state.tree||!state.tree.children||!treeFileCount(state.tree)){
+    setSyncState('error');console.warn('Scribbly: refused to push an empty workspace');return;
+  }
   setSyncState('saving');
   try{
     const ts=new Date().toISOString();
@@ -1010,38 +1501,26 @@ function exitShared(){location.hash='';$('#sharedView').classList.remove('on');}
 
 /* ======================= SEED ======================= */
 function seed(){
-  const hld1=['Design a URL Shortener','','A classic HLD warm-up. Goal: turn long URLs into short ones and redirect fast.','',
-    'REQUIREMENTS','Shorten a long URL to a 7-char code.','Redirect from short code to original in < 100ms.','Handle ~100M new URLs per month.','',
-    'The request flow:','','```flow','User -> API -> Encode -> Database','User -> API -> Cache -> Redirect','```','',
-    'Core estimates:','- 100M/month ~= 40 writes/sec','- Read:write is about 100:1, so ~4000 reads/sec','- 5 years of data ~= 6B rows','',
-    'Encoding:','Use base62 [a-zA-Z0-9] over an auto-increment ID. 62^7 is ~3.5 trillion codes.','',
-    '> Tip: keep the counter in a distributed range allocator so you never hit a single DB row for every write.','',
-    'API sketch:','```','POST /shorten  { url }  -> { code }','GET  /{code}            -> 302 redirect','```','',
-    'Follow-ups to expect','- [x] Custom aliases','- [ ] Analytics / click counts','- [ ] Link expiry & rate limiting'].join('\n');
   const hld2=['Design a Rate Limiter','','INTERVIEWER FAVORITE','Protect an API from too many requests per client.','',
     'Algorithms:','1. Token bucket — smooth, allows bursts','2. Leaky bucket — constant outflow','3. Sliding window log — accurate, more memory','',
     'Request path:','','Client -> Limiter -> Redis -> Allow or Reject','',
     'Where to store counters?','Redis with atomic INCR + EXPIRE is the standard answer.','',
+    'Sample check:','```','if (tokens > 0) {','    tokens = tokens - 1;','    allow(request);','} else {','    reject(request);','}','```','',
     '| Algorithm | Bursts | Memory |','| --- | --- | --- |','| Token bucket | yes | low |','| Sliding log | no | high |'].join('\n');
-  const dsa=['Two Pointer Technique','','PATTERN','Use two indices moving through an array to hit O(n) instead of O(n^2).','',
-    'When to reach for it:','- Sorted array + find a pair','- Reverse / palindrome checks','- Removing duplicates in place','',
-    'Remember: **sort first** if the problem lets you.'].join('\n');
   const welcome=['Welcome to Scribbly','','You type plain notes. Scribbly formats them for you — colors, sizes, spacing — automatically.','',
     'HOW IT WORKS','The first line becomes the big title. An ALL CAPS line becomes a section heading. A line ending with a colon becomes a sub-heading:','',
     'Things you can do:','- Start a line with a dash for a bullet','- [ ] Or a checkbox','- [x] Tick it when done','- Wrap words in **bold**, *italic* or ==highlight==','',
+    'Formatting buttons','Select a few lines and press the • or 1. button above the editor to turn them into a list. Press it again to turn it back.','',
+    'Press Enter on a list line and the next bullet or number appears on its own.','',
     'Turn text into a diagram:','Just type arrows and it draws itself —','','Idea -> Draft -> Review -> Publish','',
     '> Quotes look like this — great for the one line you want to remember.','',
-    'Folders & files','Use the left panel to make folders and files. Try the sample Interview Prep folder. Drag a file onto a folder to move it.','',
-    'Sharing','Hit Share for WhatsApp, Telegram, a copy-able link, or a single .html that looks identical anywhere.','',
+    'Folders & files','Use the left panel to make folders and files. Drag a file onto a folder to move it.','',
+    'Sharing','Hit Share for WhatsApp, Telegram, a copy-able link, a .txt, or a PDF.','',
     'Now delete this and start writing ✎'].join('\n');
+  // Start clean: just two reference notes, no folders to clear out.
   return {id:'root',name:'root',type:'folder',children:[
-    {id:uid(),name:'Interview Prep',type:'folder',children:[
-      {id:uid(),name:'HLD System Design',type:'folder',children:[
-        {id:uid(),name:'URL Shortener',type:'file',content:hld1},
-        {id:uid(),name:'Rate Limiter',type:'file',content:hld2}]},
-      {id:uid(),name:'DSA Patterns',type:'folder',children:[
-        {id:uid(),name:'Two Pointers',type:'file',content:dsa}]}]},
-    {id:uid(),name:'Welcome',type:'file',content:welcome}]};
+    {id:uid(),name:'Welcome',type:'file',content:welcome},
+    {id:uid(),name:'Rate Limiter',type:'file',content:hld2}]};
 }
 
 /* ======================= BOOT ======================= */
@@ -1064,7 +1543,8 @@ function boot(){
   start?openFile(start):clearEditor();
   $('#editor').addEventListener('input',onEdit);
   $('#editor').addEventListener('keydown',e=>{
-    if(e.key==='Tab'){e.preventDefault();const t=e.target,s=t.selectionStart,en=t.selectionEnd;t.value=t.value.slice(0,s)+'  '+t.value.slice(en);t.selectionStart=t.selectionEnd=s+2;onEdit();}
+    if(e.key==='Tab'){e.preventDefault();const t=e.target,s=t.selectionStart,en=t.selectionEnd;t.value=t.value.slice(0,s)+'  '+t.value.slice(en);t.selectionStart=t.selectionEnd=s+2;onEdit();return;}
+    if(e.key==='Enter'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.isComposing)continueList(e);
   });
   // paste or drop an image -> embed it in the note
   $('#editor').addEventListener('paste',e=>{
@@ -1075,7 +1555,27 @@ function boot(){
   $('#editor').addEventListener('drop',e=>{
     const files=e.dataTransfer&&e.dataTransfer.files;if(files&&files.length&&files[0].type.indexOf('image')===0){e.preventDefault();embedImageFile(files[0]);}
   });
-  window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal('shareModal');closeModal('dataModal');closeModal('authModal');}});
+  window.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      if(recording){stopMic();toast('Stopped ✓');return;}
+      closeModal('shareModal');closeModal('dataModal');closeModal('authModal');return;
+    }
+    const mod=e.metaKey||e.ctrlKey;                    // ⌘ on Mac, Ctrl on Windows/Linux
+    if(!mod||e.altKey)return;
+    const k=(e.key||'').toLowerCase();
+    if(k==='z'&&!e.shiftKey){e.preventDefault();undoEdit();}
+    else if((k==='z'&&e.shiftKey)||k==='y'){e.preventDefault();redoEdit();}
+    else if(e.shiftKey&&(e.code==='Space'||k===' ')){e.preventDefault();toggleMic();}
+    else if(k==='s'){e.preventDefault();flushSave();toast('Saved ✓');}
+    else if(k==='b'&&!e.shiftKey){e.preventDefault();applyInline('bold');}
+    else if(k==='i'&&!e.shiftKey){e.preventDefault();applyInline('italic');}
+    else if(k==='8'&&e.shiftKey){e.preventDefault();applyLineFormat('ul');}    // ⌘/Ctrl+Shift+8 — same as Docs
+    else if(k==='7'&&e.shiftKey){e.preventDefault();applyLineFormat('ol');}    // ⌘/Ctrl+Shift+7 — same as Docs
+  });
+  // never leave a typed-but-not-yet-saved edit behind
+  window.addEventListener('beforeunload',flushSave);
+  window.addEventListener('pagehide',flushSave);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSave();});
   window.addEventListener('hashchange',()=>{if(location.hash.indexOf('#doc=')===0)openSharedFromHash();else if($('#sharedView').classList.contains('on'))location.reload();});
   // installable-app (PWA): only active when hosted over http/https
   if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
