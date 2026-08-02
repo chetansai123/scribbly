@@ -374,6 +374,10 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
       <button onclick="closeModal('dataModal');openShare()">📤 Export one note as a webpage<small>A single .html that opens the same everywhere</small></button>
     </div>
     <div class="sub" style="margin-top:14px"><b>🎤 Voice typing</b><br>Pick the accent you speak — it makes recognition noticeably more accurate. Shortcut: <b id="micHint">Ctrl+Shift+Space</b> to start/stop, <b>Esc</b> to stop.</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-family:var(--font-clean);font-size:13px;color:var(--ink);cursor:pointer">
+      <input type="checkbox" id="voiceCmds" onchange="saveVoiceCmds()" style="width:16px;height:16px;accent-color:var(--red);flex:none">
+      <span>Spoken punctuation — say “comma”, “full stop”, “new line”, “new bullet”</span>
+    </label>
     <select id="voiceLang" onchange="saveVoiceLang()" style="width:100%;margin-top:6px;font-family:var(--font-clean);font-size:13px;padding:9px 10px;color:var(--ink);background:var(--paper2);border:2.5px solid var(--ink);border-radius:12px;outline:none">
       <option value="">Use my device language</option>
       <option value="en-IN">English (India)</option>
@@ -739,6 +743,7 @@ function moveNode(id,folderId){
 }
 function toggleFolder(id){state.expanded[id]=!state.expanded[id];save();renderTree();}
 function openFile(id){
+  if(recording)stopMic();            // dictation belongs to the note it started in — never carry it over
   flushSave();                       // don't lose an edit that is still debouncing
   const f=find(id);if(!f||f.node.type!=='file')return;
   state.active=id;$('#fileTitle').value=f.node.name;$('#editor').value=f.node.content||'';
@@ -765,6 +770,7 @@ function flushSave(){
   const p=pendingSave;pendingSave=null;commitEdit(p.id,p.val);
 }
 function onEdit(){
+  if(recording)micReanchor();        // typed / undid mid-dictation: speech continues from the new caret
   histRecord(true);
   updatePreview();
   queueSave(350);
@@ -776,10 +782,20 @@ function queueSave(ms){
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{const p=pendingSave;pendingSave=null;saveTimer=null;if(p)commitEdit(p.id,p.val);},ms);
 }
+/* counts without allocating an array of every word — this runs on each keystroke
+   and several times a second while dictating, so it has to stay cheap */
+function countWords(s){
+  let n=0,inw=false;
+  for(let i=0;i<s.length;i++){
+    const c=s.charCodeAt(i);
+    if(c===32||c===10||c===9||c===13||c===11||c===12||c===160)inw=false;   // 160 = &nbsp;
+    else if(!inw){inw=true;n++;}
+  }
+  return n;
+}
 function updatePreview(){
   const v=$('#editor').value;
-  const words=(v.trim().match(/\S+/g)||[]).length;
-  $('#counts').textContent=words+' words · '+v.length+' chars';
+  $('#counts').textContent=countWords(v)+' words · '+v.length+' chars';
   if(!v.trim()){$('#preview').innerHTML='<div class="doc-empty">Your formatted note appears here ✨</div>';return;}
   // a formatting error must never leave the previous note's text on screen
   try{$('#preview').innerHTML=render(v);}
@@ -924,12 +940,150 @@ function insertAtCursor(text){
   histRecord(false);onEdit();
 }
 
-/* ======================= VOICE TYPING ======================= */
-let recog=null,recording=false,micBefore='',micAfter='',micPrevTimer=null,micRestart=null;
+/* ======================= VOICE TYPING =======================
+   Every interim result used to rebuild the WHOLE textarea (`ta.value = before +
+   interim + after`). On a long note that is a full string rebuild plus a full
+   re-layout, several times a second — which is exactly what made dictation crawl.
+   Now a result only rewrites the characters that actually changed, and all the
+   follow-on work (counts, save, formatted pane) is batched into one frame. */
+let recog=null,recording=false;
+let micNote=null,micAnchor=0,micFinal='',micPending='',micShown='';
+let micRaf=0,micTimer=null,micPrevTimer=null,micRestart=null,micBackoff=0,micFails=0,micSaveAt=0,micGreeted=false;
+let micCost=0,micCostLen=1,micGap=0,micPrevGap=400;
+
+/* How expensive is one visible edit on THIS note, on THIS device?
+   A <textarea> re-lays-out all of its text on every change, so the cost grows
+   with the note: measured ~0.04ms on a short note and ~13ms on a 22k-character
+   one — and several times that on a phone. Interim speech results arrive ~8x a
+   second, so on a long note that alone is what made dictation crawl. Measure the
+   real cost once, then space the updates to match it. */
+function micCalibrate(){
+  const ta=$('#editor');
+  try{
+    const t0=performance.now();
+    ta.style.letterSpacing='0.01px';ta.offsetHeight;   // force a real re-layout
+    ta.style.letterSpacing='';ta.offsetHeight;
+    micCost=(performance.now()-t0)/2;
+  }catch(e){micCost=0;}
+  micCostLen=Math.max(1,ta.value.length);
+  micTune();
+}
+function micTune(){                                    // cost tracks length, so scale as the note grows
+  const len=Math.max(1,$('#editor').value.length);
+  const cost=micCost*(len/micCostLen);
+  micGap=Math.min(500,Math.round(cost*8));             // cheap note -> every frame; heavy note -> ~8/sec
+  micPrevGap=Math.max(400,Math.round(cost*24));
+}
+
 function micLang(){
   // en-IN (or whatever the device is set to) recognises local names and accents
   // far better than a hard-coded en-US ever did
   return localStorage.getItem('scribbly_voice_lang')||navigator.language||'en-US';
+}
+function voiceCmdsOn(){return localStorage.getItem('scribbly_voice_cmds')!=='off';}
+
+/* ---- spoken punctuation & structure: say it, get the real character ----
+   Deliberately missing: "period" and "newline". Both are ordinary words in the
+   kind of notes this app is for ("grace period", "a newline character") and both
+   already have an unambiguous spoken form here, so mapping them costs more in
+   swallowed words than it saves in keystrokes. */
+const VOICE_MAP={
+  'comma':',','full stop':'.','question mark':'?','exclamation mark':'!','exclamation point':'!',
+  'colon':':','semicolon':';','semi colon':';','hyphen':'-','dash':' — ',
+  'open bracket':' (','close bracket':')','open quote':' "','close quote':'"',
+  'new line':'\n','next line':'\n','new paragraph':'\n\n','new para':'\n\n',
+  'new bullet':'\n- ','bullet point':'\n- ','next bullet':'\n- ',
+  'new task':'\n- [ ] ','new checkbox':'\n- [ ] '   // not bare "check box" — too easy to say for real
+};
+function applyVoiceCmds(s){
+  const raw=s.trim();
+  if(!voiceCmdsOn()||!raw)return raw;
+  const w=raw.split(/\s+/);let out='';
+  for(let i=0;i<w.length;i++){
+    let hit=null,used=1;
+    for(let n=Math.min(2,w.length-i);n>=1;n--){        // two-word phrases win over one-word
+      const key=w.slice(i,i+n).join(' ').toLowerCase().replace(/[.,!?;:]+$/,'');
+      if(VOICE_MAP[key]){hit=VOICE_MAP[key];used=n;break;}
+    }
+    if(hit){out=out.replace(/ $/,'')+hit;i+=used-1;}   // punctuation hugs the word before it
+    else out+=(out&&!/\s$/.test(out)?' ':'')+w[i];
+  }
+  return out;
+}
+/* sentence case, so dictation reads like writing instead of one lowercase run-on.
+   Runs over the whole chunk, not just its first word — a "full stop" or
+   "new bullet" said mid-sentence opens a new sentence too. */
+function micSentenceCase(txt,tail){
+  if(!/^en/i.test(micLang())||!txt)return txt;
+  const src=tail+txt,off=tail.length;
+  const cased=src.replace(/[a-z]/g,(ch,i)=>{
+    if(i<off)return ch;                                 // never re-case what is already written
+    const before=src.slice(Math.max(0,i-48),i);
+    if(i&&!/[\s([]$/.test(before))return ch;            // mid-word letter
+    if(!before)return ch.toUpperCase();                 // very start of an empty note
+    return (/[.!?]["')\]]?[ \t]*$/.test(before)||/\n[ \t]*$/.test(before)
+      ||/(^|\n)[ \t]*(?:[-*]|\d+[.)])[ \t]*(?:\[[ xX]\][ \t]*)?$/.test(before))
+      ? ch.toUpperCase() : ch;
+  }).slice(off);
+  return cased.replace(/(^|[\s([])i(?=[\s.,!?;:)'’]|$)/g,'$1I');   // the pronoun, always capital
+}
+function micAppendFinal(raw){
+  const txt=applyVoiceCmds(raw);if(!txt)return;
+  const ta=$('#editor');
+  const tail=(micFinal||ta.value.slice(0,micAnchor)).slice(-48);   // a short tail is all the joins need
+  const sep=(tail&&!/\s$/.test(tail)&&!/^[\s,.!?;:)\]"']/.test(txt))?' ':'';
+  micFinal+=sep+micSentenceCase(txt,tail+sep);
+}
+/* the whole point: replace only the span that differs, never the whole note */
+function micWrite(){
+  if(state.active!==micNote)return false;
+  const ta=$('#editor'),next=micFinal+micPending;
+  if(next===micShown)return true;
+  let p=0;const n=Math.min(next.length,micShown.length);
+  while(p<n&&next.charCodeAt(p)===micShown.charCodeAt(p))p++;
+  const from=micAnchor+p,to=micAnchor+micShown.length;
+  try{ta.setRangeText(next.slice(p),from,to,'end');}
+  catch(e){
+    ta.value=ta.value.slice(0,from)+next.slice(p)+ta.value.slice(to);
+    try{ta.selectionStart=ta.selectionEnd=micAnchor+next.length;}catch(_){}
+  }
+  micShown=next;return true;
+}
+function micPaint(){
+  if(!recording)return;
+  if(state.active!==micNote){stopMic();return;}       // never write one note's speech into another
+  if(!micWrite())return;
+  const ta=$('#editor');
+  micTune();
+  $('#counts').textContent=countWords(ta.value)+' words · '+ta.value.length+' chars';
+  queueSave(700);
+  // a long dictation must not sit unsaved behind a debounce that keeps resetting
+  if(Date.now()-micSaveAt>4000){micSaveAt=Date.now();flushSave();}
+  // redraw the formatted pane a couple of times a second at most — and not at
+  // all when it isn't on screen
+  if(state.mode!=='write'&&!micPrevTimer)
+    micPrevTimer=setTimeout(()=>{micPrevTimer=null;if(recording)updatePreview();},micPrevGap);
+}
+function micCancel(){
+  if(micRaf){cancelAnimationFrame(micRaf);micRaf=0;}
+  if(micTimer){clearTimeout(micTimer);micTimer=null;}
+}
+function micFlush(){micCancel();micPaint();}
+/* Finalised words go in at once — they are the real content and arrive about
+   once a phrase. Interim guesses are throttled to whatever this note can afford. */
+function micSchedule(now){
+  if(now){micFlush();return;}
+  if(micRaf||micTimer)return;
+  if(micGap>16){micTimer=setTimeout(micFlush,micGap);return;}
+  micRaf=requestAnimationFrame(micFlush);
+  micTimer=setTimeout(micFlush,150);                   // rAF is paused while the tab is hidden
+}
+/* the user typed, pasted or undid mid-dictation — carry on from wherever they are now */
+function micReanchor(){
+  const ta=$('#editor');
+  micNote=state.active;
+  micAnchor=(ta.selectionStart==null)?ta.value.length:ta.selectionStart;
+  micFinal='';micPending='';micShown='';
 }
 function updateMicUI(){
   const b=$('#micBtn');if(!b)return;
@@ -937,20 +1091,66 @@ function updateMicUI(){
   b.textContent=recording?'⏹ Stop':'🎤 Speak';
   b.title=recording?'Stop dictating (Esc)':'Voice typing — dictates at your cursor ('+modKeyName()+'+Shift+Space)';
 }
-function stopMic(){
-  recording=false;
-  clearTimeout(micRestart);micRestart=null;
-  if(recog){try{recog.stop();}catch(e){}}
-  updateMicUI();
+function micDrop(){                                    // throw the engine away after a hard failure
+  if(!recog)return;
+  try{recog.onstart=recog.onresult=recog.onerror=recog.onend=null;recog.abort();}catch(e){}
+  recog=null;
 }
-/* redraw the formatted pane at most a few times a second while dictating —
-   rendering the whole document on every interim word is what made it crawl */
-function micTick(){
-  const ta=$('#editor');
-  const words=(ta.value.trim().match(/\S+/g)||[]).length;
-  $('#counts').textContent=words+' words · '+ta.value.length+' chars';
-  queueSave(700);
-  if(!micPrevTimer)micPrevTimer=setTimeout(()=>{micPrevTimer=null;updatePreview();},450);
+function stopMic(){
+  const was=recording;recording=false;
+  clearTimeout(micRestart);micRestart=null;
+  clearTimeout(micPrevTimer);micPrevTimer=null;
+  micCancel();
+  if(recog){try{recog.stop();}catch(e){}}
+  if(was&&micWrite()){                                 // final sync while the dictated note is still open
+    micPending='';micWrite();
+    updatePreview();queueSave(0);flushSave();histRecord(false);
+  }
+  micPending='';updateMicUI();
+}
+/* Chrome ends the session on every pause. Restart instantly so no word is lost,
+   and only back off if the engine says it isn't ready yet. */
+function micRelaunch(){
+  if(!recording||!recog)return;
+  clearTimeout(micRestart);
+  micRestart=setTimeout(()=>{
+    micRestart=null;if(!recording||!recog)return;
+    try{recog.start();}
+    catch(e){
+      if(++micFails>6){toast('Voice typing stopped — try again');stopMic();micDrop();return;}
+      micBackoff=Math.min((micBackoff||80)*3,1500);micRelaunch();
+    }
+  },micBackoff);
+}
+function micEngine(SR){
+  if(recog)return recog;                               // reuse: a fresh engine costs start-up latency
+  recog=new SR();
+  recog.interimResults=true;recog.continuous=true;recog.maxAlternatives=1;
+  recog.onstart=()=>{micBackoff=0;micFails=0;if(!micGreeted){micGreeted=true;toast('Listening… speak now 🎤');}};
+  recog.onresult=e=>{
+    if(!recording)return;
+    micFails=0;let interim='',settled=false;
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      // lock finals in immediately: nothing accumulates, so Chrome's mid-session
+      // restarts can't duplicate or drop text
+      if(r.isFinal){micAppendFinal(r[0].transcript);settled=true;}
+      else interim+=r[0].transcript;
+    }
+    micPending=interim?((micFinal&&!/\s$/.test(micFinal)&&!/^\s/.test(interim))?' ':'')+interim:'';
+    micSchedule(settled);
+  };
+  recog.onerror=ev=>{
+    const err=ev.error||'';
+    if(err==='no-speech'||err==='aborted')return;      // transient — keep listening
+    if(err==='network')toast('Voice typing needs an internet connection');
+    else if(err==='not-allowed'||err==='service-not-allowed')toast('Microphone blocked — allow it from the 🔒 in the address bar');
+    else if(err==='audio-capture')toast('No microphone found');
+    else toast('Voice error: '+err);
+    stopMic();micDrop();
+  };
+  recog.onend=()=>{if(recording)micRelaunch();else updateMicUI();};
+  return recog;
 }
 function toggleMic(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -958,45 +1158,16 @@ function toggleMic(){
   if(recording){stopMic();toast('Stopped ✓');return;}
   if(!state.active){toast('Open a note first');return;}
   const ta=$('#editor');ta.focus();
-  histRecord(false);                                   // dictation is one undo step
-  const pos=(ta.selectionStart==null)?ta.value.length:ta.selectionStart;
-  micBefore=ta.value.slice(0,pos);micAfter=ta.value.slice(pos);
-  recog=new SR();
-  recog.lang=micLang();recog.interimResults=true;recog.continuous=true;recog.maxAlternatives=1;
-  recog.onstart=()=>{toast('Listening… speak now 🎤');};
-  recog.onresult=e=>{
-    let interim='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      const r=e.results[i];
-      // lock finals straight into the anchor: nothing accumulates, so a mid-session
-      // restart (Chrome does this on every pause) can't duplicate or drop text
-      if(r.isFinal)micBefore+=r[0].transcript;
-      else interim+=r[0].transcript;
-    }
-    ta.value=micBefore+interim+micAfter;
-    const c=micBefore.length+interim.length;
-    try{ta.selectionStart=ta.selectionEnd=c;}catch(err){}
-    micTick();
-  };
-  recog.onerror=ev=>{
-    if(ev.error==='no-speech'||ev.error==='aborted')return;   // transient — keep going
-    if(ev.error==='network'){toast('Voice needs an internet connection');stopMic();return;}
-    recording=false;updateMicUI();
-    toast(ev.error==='not-allowed'||ev.error==='service-not-allowed'
-      ? 'Microphone blocked — click the 🔒 in the address bar and allow the mic'
-      : 'Voice error: '+ev.error);
-  };
-  recog.onend=()=>{
-    if(recording){                                     // Chrome ends the session on pauses
-      clearTimeout(micRestart);
-      micRestart=setTimeout(()=>{if(recording){try{recog.start();}catch(e){}}},250);
-      return;
-    }
-    clearTimeout(micPrevTimer);micPrevTimer=null;
-    updatePreview();queueSave(200);histRecord(false);updateMicUI();
-  };
-  try{recog.start();recording=true;updateMicUI();}
-  catch(e){recording=false;updateMicUI();toast('Could not start the microphone');}
+  histRecord(false);                                   // the whole dictation is one undo step
+  micNote=state.active;
+  micAnchor=(ta.selectionStart==null)?ta.value.length:ta.selectionStart;
+  micFinal='';micPending='';micShown='';
+  micBackoff=0;micFails=0;micGreeted=false;micSaveAt=Date.now();
+  micCalibrate();                                      // how much can this note afford per update?
+  const r=micEngine(SR);r.lang=micLang();
+  recording=true;updateMicUI();
+  try{r.start();}
+  catch(e){micBackoff=200;micRelaunch();}              // a previous session still winding down
 }
 
 /* ======================= IMAGE EMBED ======================= */
@@ -1149,12 +1320,21 @@ function printOne(name,content){
 function saveVoiceLang(){
   const v=$('#voiceLang').value;
   if(v)localStorage.setItem('scribbly_voice_lang',v);else localStorage.removeItem('scribbly_voice_lang');
-  if(recording){stopMic();setTimeout(toggleMic,300);}     // apply straight away
+  const was=recording;
+  if(was)stopMic();
+  micDrop();                                               // rebuild the engine on the new language
+  if(was)setTimeout(toggleMic,300);                        // apply straight away
   toast('Voice language set ✓');
+}
+function saveVoiceCmds(){
+  const on=$('#voiceCmds').checked;
+  localStorage.setItem('scribbly_voice_cmds',on?'on':'off');
+  toast(on?'Spoken punctuation on ✓':'Spoken punctuation off — words stay words ✓');
 }
 function openData(){
   const k=$('#aiKey');if(k)k.value=getAiKey();
   const vl=$('#voiceLang');if(vl)vl.value=localStorage.getItem('scribbly_voice_lang')||'';
+  const vc=$('#voiceCmds');if(vc)vc.checked=voiceCmdsOn();
   const mh=$('#micHint');if(mh)mh.textContent=(IS_MAC?'⌘':'Ctrl')+'+Shift+Space';
   $('#dataModal').classList.add('on');
 }
@@ -1510,12 +1690,13 @@ function seed(){
   const welcome=['Welcome to Scribbly','','You type plain notes. Scribbly formats them for you — colors, sizes, spacing — automatically.','',
     'HOW IT WORKS','The first line becomes the big title. An ALL CAPS line becomes a section heading. A line ending with a colon becomes a sub-heading:','',
     'Things you can do:','- Start a line with a dash for a bullet','- [ ] Or a checkbox','- [x] Tick it when done','- Wrap words in **bold**, *italic* or ==highlight==','',
-    'Formatting buttons','Select a few lines and press the • or 1. button above the editor to turn them into a list. Press it again to turn it back.','',
+    'Formatting buttons:','Select a few lines and press the • or 1. button above the editor to turn them into a list. Press it again to turn it back.','',
     'Press Enter on a list line and the next bullet or number appears on its own.','',
+    'Talk instead of typing:','Press '+modKeyName()+'+Shift+Space (or the 🎤 Speak button) and just talk — Esc stops. It types where your cursor is.','- Say "full stop", "comma" or "question mark" and you get the real punctuation','- Say "new line", "new paragraph" or "new bullet" to move on','- Set your accent in 💾 → Voice typing — it is the single biggest accuracy win','',
     'Turn text into a diagram:','Just type arrows and it draws itself —','','Idea -> Draft -> Review -> Publish','',
     '> Quotes look like this — great for the one line you want to remember.','',
-    'Folders & files','Use the left panel to make folders and files. Drag a file onto a folder to move it.','',
-    'Sharing','Hit Share for WhatsApp, Telegram, a copy-able link, a .txt, or a PDF.','',
+    'Folders & files:','Use the left panel to make folders and files. Drag a file onto a folder to move it.','',
+    'Sharing:','Hit Share for WhatsApp, Telegram, a copy-able link, a .txt, or a PDF.','',
     'Now delete this and start writing ✎'].join('\n');
   // Start clean: just two reference notes, no folders to clear out.
   return {id:'root',name:'root',type:'folder',children:[

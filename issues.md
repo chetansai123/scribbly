@@ -34,7 +34,19 @@ Added **📦 Download ALL my notes (.zip)** — real folder structure, one click
 ### 8. [Safety] `pushWorkspace()` could overwrite the cloud with an empty tree
 It upserts the whole workspace, so a blank or half-booted session would replace good data with nothing. Now refuses to push a tree containing zero files.
 
-### 9. Code lost all indentation
+### 9. [CRITICAL] Dictating, then clicking another file, overwrote that file
+Same family as issue 1, but through the microphone. `toggleMic()` captured the note's
+text into `micBefore`/`micAfter` at start, and every speech result then did
+`ta.value = micBefore + interim + micAfter`. Clicking a different file mid-dictation
+did not stop the mic — so the next result wrote the **old** note's text into the
+**newly opened** note, and the debounced save committed it under the new note's id.
+A silent overwrite of a whole file. Now dictation is pinned to the note it started in:
+`openFile()` stops the mic first, the paint step refuses to write when
+`state.active` has moved, and stopping flushes the spoken text to the note it
+belonged to. Regression-tested from both sides — the note spoken into keeps the text,
+the note switched to is untouched.
+
+### 10. Code lost all indentation
 Every line went through `.trim()` into a `<p>`, so pasted Java/JS collapsed to the left margin. Added `codeLike()` detection (indent, braces, `;`, code keywords **plus** code punctuation) grouping runs of 2+ lines into `<pre>` with indentation preserved and a common-indent `dedent()`. Block code is now monospace so brackets actually align. Guarded against eating prose: lines like "If you delete a middle element…" stay prose.
 
 ---
@@ -69,7 +81,70 @@ Every line went through `.trim()` into a `<p>`, so pasted Java/JS collapsed to t
 - **Trimmed the starting notes.** New installs previously got 3 nested folders and 4 sample files. Now it is two flat reference notes — **Welcome** and **Rate Limiter** — and no folders. Removed the orphaned URL Shortener / Two Pointers seed text, added a code sample to Rate Limiter, and fixed the Welcome note which still pointed at the deleted "Interview Prep" folder.
   - ⚠️ This only affects a **fresh** install (a browser with no saved data). Existing notes are untouched — the seed runs only when nothing is stored.
 
-- **Mic keyboard shortcut:** `⌘/Ctrl+Shift+Space` starts/stops dictation, `Esc` stops. No more reaching for the Speak button.
+- **Mic keyboard shortcut:** `⌘/Ctrl+Shift+Space` starts/stops dictation, `Esc` stops. No more reaching for the Speak button. It is now written down where you'd actually find it: a **Talk instead of typing** section in the Welcome note, the 💾 panel, and the Speak button's tooltip.
+
+---
+
+## Voice typing, rebuilt
+
+The lag had a cause I had guessed wrong before. It is not the formatted pane — that
+was already throttled. Measured on this machine, one dictation update costs:
+
+| Note size | Cost of a single update |
+| --- | --- |
+| 11 characters | 0.04 ms |
+| 3,300 characters | 4.1 ms |
+| 22,000 characters | 13–18 ms |
+| 77,000 characters | 52 ms |
+
+It is the **`<textarea>` re-laying out all of its own text on every change**, and it
+scales with the length of the note. Emptying the formatted pane changed it by 5%
+(14.07 ms → 13.39 ms), so the preview was never the problem. Interim speech results
+arrive several times a second, so on a long note — on a phone, several times slower
+again — that alone is what made it crawl.
+
+- **The update rate now follows the measured cost.** When you press Speak, the app
+  times one real re-layout of the note you are in, on the device you are on, and
+  spaces interim updates to keep that work under ~12% of the main thread. A short
+  note updates every frame (2 ms gap — indistinguishable from instant); a 22k note
+  updates ~8 times a second; a 77k note ~2.5 times a second. **Finalised words are
+  never delayed** — they go in the moment they are confirmed, which is what you are
+  actually reading. The formatted pane scales the same way and is skipped entirely
+  in Write mode.
+- **An edit now rewrites only the characters that changed**, by diffing against what
+  is already on screen (`setRangeText` over the changed span, never `value =`).
+  Verified: 18 speech results into a 22k note performed **0 full-textarea rewrites**
+  and touched at most 89 characters each. This is not where the speed came from —
+  it measured within noise of the old way — but it keeps the scroll position and the
+  browser's own undo stack intact instead of resetting both several times a second.
+- **Spoken punctuation.** Say "comma", "full stop", "question mark", "new line",
+  "new paragraph", "new bullet", "new task" and you get the real thing, capitalised
+  as a new sentence. Toggle in 💾 if you'd rather have the literal words.
+  - Deliberately *not* commands: **"period"** and **"newline"**. Both are ordinary
+    words in these notes ("grace period", "split on the newline character") and both
+    already have an unambiguous spoken form, so mapping them swallowed more real
+    words than it saved. "check box" went the same way; "new checkbox" stays.
+- **It reads like writing now.** Sentence case after `.`/`?`/`!`, after a line break,
+  and after a list marker — applied across a whole utterance, so "one full stop two"
+  gives "One. Two", not "One. two". Spacing joins correctly against whatever is
+  already there, and standalone "i" becomes "I". English only — Hindi, Telugu, Tamil
+  and the rest are left exactly as recognised.
+- **No word lost at a pause.** Chrome ends the recognition session on every pause; the
+  restart was on a fixed 250 ms delay, which is 250 ms of speech dropped each time.
+  It now restarts immediately and only backs off (80 ms → 1.5 s) if the engine says
+  it isn't ready, giving up with a clear message after 6 failures instead of spinning.
+- **Long dictations save.** Every result reset a 700 ms debounce, so a three-minute
+  unbroken dictation never actually reached storage. There is now a hard flush every
+  4 seconds regardless.
+- **Typing mid-dictation no longer corrupts the note.** Type, paste, or undo while the
+  mic is live and speech simply continues from the new cursor position.
+- **Fixed: dictation stalled in a background tab.** The batching used
+  `requestAnimationFrame`, which browsers pause when the tab is hidden. There is now a
+  timer fallback.
+
+Also fixed while in here: the Welcome note's own section headings ran into their body
+text — "Formatting buttonsSelect a few lines…", "SharingHit Share for…". They are
+proper sub-headings now.
 
 ---
 
