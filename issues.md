@@ -156,3 +156,35 @@ The browser cannot write PDF files directly without a bundled PDF library, and t
 
 - Issue 5 (sign-in) against the real Supabase project.
 - Pop-ups must be allowed for the two PDF actions.
+
+---
+
+## Testing
+
+`tests.html` — DOM test harness. Serve the folder and open it:
+
+```
+python3 -m http.server 8765
+```
+then `http://localhost:8765/tests.html` → **Run tests**.
+
+It loads the real `index.html` in a frame and drives it through **real DOM events** —
+clicking the actual buttons, dispatching real `keydown` / `blur`. UI paths are never
+exercised by calling app functions by name: a shadowed global resolves the same way
+for a test as it does for the bug, so a name-based test agrees with the very defect
+it should catch. That is exactly how the duplicate `commitEdit` shipped through three
+commits and several "verified" runs.
+
+30 checks across 7 groups: creating a file, renaming without losing text, folders and
+nesting, edits landing on the right note, persistence, repair of data damaged by older
+builds, and source guards (no duplicate top-level `function` declarations; every inline
+handler in the tree resolves to a real function).
+
+Each group is isolated — a crash in one cannot hide the groups after it.
+
+**Verified to fail:** reintroducing the duplicate `commitEdit` turns 30 passing into
+14 failing, and the source guard names `commitEdit` outright.
+
+**Your notes are safe.** The harness shares `localStorage` with the app, so it copies
+`scribbly_v2` aside before the first test and restores it when the run ends, including
+on crash or refresh. **Restore my notes** recovers an interrupted run.
