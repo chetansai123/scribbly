@@ -447,7 +447,18 @@ function descIds(n){const ids=[];walk(n,x=>ids.push(x.id));return ids;}
 function save(){try{localStorage.setItem(LS,JSON.stringify(state));}catch(e){}}
 /* mark that the user changed real content (drives cloud sync + login merge) */
 function touch(){state.dirty=true;state.updatedAt=Date.now();schedulePush();}
-function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.tree)return s;}catch(e){}return null;}
+function load(){try{const s=JSON.parse(localStorage.getItem(LS));if(s&&s.tree){repairTree(s.tree);return s;}}catch(e){}return null;}
+/* heal notes left in a broken shape by an earlier build: a file with no name
+   (rename never committed) or with its content field missing entirely */
+function repairTree(root){
+  walk(root,n=>{
+    if(n===root)return;
+    if(typeof n.name!=='string'||!n.name.trim())n.name=(n.type==='folder'?'New folder':'Untitled');
+    if(n.type==='file'&&typeof n.content!=='string')n.content='';
+    if(n.type==='folder'&&!Array.isArray(n.children))n.children=[];
+  });
+  return root;
+}
 
 /* ======================= HAND-DRAWN SVG ENGINE ======================= */
 function seeded(seed){let s=(seed*2654435761)>>>0||1;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};}
@@ -677,9 +688,10 @@ function nodeEl(node){
   if(isFolder&&open)row.classList.add('open');
   if(node.id===state.active)row.classList.add('active');
   const namePart=editing
-    ? '<input class="tree-edit" value="'+escapeHtml(node.name)+'" spellcheck="false" onclick="event.stopPropagation()" '+
-        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}else if(event.key===\'Escape\'){event.stopPropagation();cancelEdit(\''+node.id+'\');}" '+
-        'onblur="commitEdit(\''+node.id+'\')">'
+    ? '<input class="tree-edit" value="'+escapeHtml(node.name)+'" spellcheck="false" enterkeyhint="done" '+
+        'placeholder="'+(isFolder?'Folder name':'File name')+' — press Enter" onclick="event.stopPropagation()" '+
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();commitNameEdit(\''+node.id+'\');}else if(event.key===\'Escape\'){event.stopPropagation();cancelEdit(\''+node.id+'\');}" '+
+        'onblur="commitNameEdit(\''+node.id+'\')">'
     : '<span class="nm">'+escapeHtml(node.name)+'</span>'+
       '<span class="acts">'+
         (isFolder?'<button title="New file inside" onclick="event.stopPropagation();startCreate(\'file\',\''+node.id+'\')">＋📄</button>'+
@@ -709,7 +721,10 @@ function startCreate(type,folderId){
   editingId=node.id;editingNew=true;renderTree();focusEdit();
 }
 function startRename(id){editingId=id;editingNew=false;renderTree();focusEdit();}
-function commitEdit(id){
+/* name this commitNameEdit, NOT commitEdit: the editor's own commitEdit(id,val)
+   is declared later in this file and a same-named function would silently
+   replace this one (hoisting) — that swap blanked notes on rename. */
+function commitNameEdit(id){
   if(editingId!==id)return;
   const inp=document.querySelector('.tree-edit');const val=inp?inp.value.trim():'';
   const f=find(id);const wasNew=editingNew;editingId=null;editingNew=false;
@@ -758,6 +773,7 @@ let saveTimer=null,pendingSave=null;
 /* write an edit to the note it was actually typed into — never to whatever
    file happens to be open when the debounce timer finally fires */
 function commitEdit(id,val){
+  if(typeof val!=='string'){save();return;}   // a stray call must never blank a note
   const f=id?find(id):null;
   if(f&&f.node.type==='file'&&f.node.content!==val){f.node.content=val;save();touch();}
   else save();
@@ -1472,7 +1488,7 @@ function restoreData(file){
     const data=JSON.parse(rd.result);const tree=data.tree||(data.app?null:data);
     if(!tree||!tree.children){toast('That file is not a Scribbly backup');return;}
     if(!confirm('Restore this backup? It replaces your current notes.'))return;
-    state.tree=tree;state.expanded=data.expanded||{};state.active=null;
+    state.tree=repairTree(tree);state.expanded=data.expanded||{};state.active=null;
     if(data.images)state.images=Object.assign({},state.images,data.images);
     save();touch();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();closeModal('dataModal');toast('Notes restored ✓');
   }catch(e){toast('Could not read that file');}};
@@ -1567,7 +1583,7 @@ async function pushWorkspace(){
 }
 function schedulePush(){if(!supa||!sbSession)return;setSyncState('saving');clearTimeout(pushTimer);pushTimer=setTimeout(pushWorkspace,1400);}
 function loadCloud(cloud){
-  state.tree=cloud.tree;state.expanded=cloud.expanded||{};state.images=Object.assign({},state.images,cloud.images||{});
+  state.tree=repairTree(cloud.tree);state.expanded=cloud.expanded||{};state.images=Object.assign({},state.images,cloud.images||{});
   state.active=null;state.dirty=false;state.cloudUserId=sbSession.user.id;
   save();renderTree();const nf=firstFile();nf?openFile(nf.id):clearEditor();
 }
