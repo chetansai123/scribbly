@@ -24,10 +24,25 @@ Dashboard → **Authentication → Sign In / Providers → Email** → turn **of
 ## 3. Allow your app's URL (required for Google + hosted use)
 
 Dashboard → **Authentication → URL Configuration**:
-- **Site URL:** your deployed URL, e.g. `https://magnificent-shortbread-d30ef8.netlify.app`
+- **Site URL:** your deployed URL, e.g. `https://myscribbly.vercel.app`
 - **Redirect URLs (allow list):** add each origin you use, e.g.
-  - `https://magnificent-shortbread-d30ef8.netlify.app/**`
-  - `http://localhost:8000/**`  (for local testing)
+  - `https://myscribbly.vercel.app/**`
+  - `http://localhost:8765/**`  (for local testing)
+
+> ### ⚠️ If you ever change hosting, you MUST update both fields above
+>
+> Supabase does not error on an unlisted redirect URL — it **silently ignores it and
+> sends you to Site URL instead**. So moving from one host to another without updating
+> these two fields looks like this:
+>
+> 1. You sign in on the new URL.
+> 2. Google auth completes and drops you on the **old** host.
+> 3. The session is stored under the old origin, so the new one never sees a login —
+>    it asks you to sign in again on every single visit.
+>
+> Nothing in the app code causes this and nothing in the code can fix it; `redirectTo`
+> is already `location.origin + location.pathname`. It is purely these two dashboard
+> fields. This exact thing happened on the Netlify → Vercel move.
 
 ## 4. (Optional) Enable "Continue with Google"
 
@@ -37,7 +52,7 @@ Dashboard → **Authentication → URL Configuration**:
 2. [Google Cloud Console](https://console.cloud.google.com) → create/select a project →
    **APIs & Services → OAuth consent screen** → External → fill app name + your email → save.
 3. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**:
-   - **Authorized JavaScript origins:** your app origins (Netlify URL, `http://localhost:8000`)
+   - **Authorized JavaScript origins:** your app origins (`https://myscribbly.vercel.app`, `http://localhost:8765`)
    - **Authorized redirect URIs:** the Supabase **Callback URL** from step 1
    - Create → copy the **Client ID** and **Client secret**.
 4. Paste the Client ID + secret back into Supabase's Google provider → Save.
