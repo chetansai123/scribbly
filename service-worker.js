@@ -1,5 +1,5 @@
 /* Scribbly service worker — makes the app installable & work offline */
-const CACHE = 'scribbly-v5';
+const CACHE = 'scribbly-v6';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {

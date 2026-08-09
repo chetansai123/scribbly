@@ -5,13 +5,20 @@ uses a free [Supabase](https://supabase.com) project. The app already has the
 project URL + **public** publishable key baked in (safe to commit — it's
 protected by Row-Level Security). You only need to do the steps below once.
 
-## 1. Create the database table (required — 2 min)
+## 1. Create the database tables (required — 2 min)
 
 Supabase Dashboard → **SQL Editor** → **New query** → paste all of
 [`supabase-setup.sql`](supabase-setup.sql) → **Run**.
 
-This creates a `workspaces` table (one row per user) with Row-Level Security so
-each signed-in user can only read/write their **own** notes.
+That script creates two tables:
+
+- **`workspaces`** — one row per user, holding their whole set of notes, with
+  Row-Level Security so each signed-in user can only read/write their **own** row.
+- **`shares`** — one row per short share link. Without it, **Copy link** still
+  works but falls back to the old form that carries the entire note inside the
+  URL, so a long note produces a several-thousand-character link.
+
+The script is safe to re-run: it only creates what is missing.
 
 After this, **email + password** sign-in already works.
 
@@ -66,3 +73,23 @@ Email/password works without any of step 4.
 - Free tier easily covers a personal/portfolio app. Text notes are tiny.
 - Storage model: the whole workspace (folders + files) is one JSON row per user.
   On login it pulls your latest; on edit it pushes (debounced). Guests stay local.
+
+## Share links
+
+Pressing **Copy link** writes a snapshot of that one note into `shares` and hands
+back `https://your-app/#s=k3Rt9wQ`. Points worth knowing:
+
+- **A share is an unlisted link, not a private one.** Anyone holding the id can
+  read that note — the same bargain as an unlisted YouTube video. Nothing lists
+  the ids, and 62⁷ (≈3.5 trillion) of them makes guessing one impractical, but
+  don't share anything you would mind a link-holder reading.
+- **A share is a snapshot.** Editing the note afterwards does not change an
+  already-sent link; press Copy link again to send the newer version.
+- **Sharing needs no account.** The insert policy is open to anonymous visitors,
+  which is what lets a guest share. There is deliberately no update or delete
+  policy, so a published link can never be rewritten under whoever you sent it to.
+- **Offline, or no `shares` table** → the app silently falls back to the old
+  whole-note-in-the-URL link, so Copy link never fails outright.
+- Old `#doc=…` links shared before this existed still open, and always will.
+- Tidying up later, e.g. drop shares older than a year:
+  `delete from public.shares where created_at < now() - interval '1 year';`

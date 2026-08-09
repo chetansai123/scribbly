@@ -1265,11 +1265,87 @@ function closeModal(id){$('#'+id).classList.remove('on');}
 /* ======================= SHARE ======================= */
 function currentFile(){return state.active?find(state.active).node:null;}
 function shareText(){const f=currentFile();if(!f)return'';let t=$('#editor').value||'';if(t.length>1400)t=t.slice(0,1400)+'…';return'📝 '+f.name+'\n\n'+t;}
-function shareLink(){
+
+/* ---- short links -------------------------------------------------------
+   The note is stored once in the cloud under a 7-character id and the link
+   carries only that id:  https://…/#s=k3Rt9wQ  — about 40 characters, the
+   same length whether the note is a shopping list or 400 lines of notes.
+   The old whole-note-in-the-URL form is still built as a fallback (offline,
+   or a project without the `shares` table) and is still readable, so links
+   sent before this change keep working forever. */
+const SHARE_ID_LEN=7;
+const SHARE_ID_RE=/^[0-9A-Za-z]{4,32}$/;
+function shortId(n){
+  const abc='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  const b=new Uint8Array(n);(crypto&&crypto.getRandomValues)?crypto.getRandomValues(b):b.forEach((_,i)=>b[i]=Math.random()*256);
+  let s='';for(let i=0;i<n;i++)s+=abc[b[i]%abc.length];return s;
+}
+/* pasted images live in state.images as `img:ID`, not in the note text —
+   send the ones this note uses so a shared note isn't full of blank frames */
+function shareImages(text){
+  const out={};let m,re=/img:([A-Za-z0-9_-]+)/g;
+  while((m=re.exec(text||''))){const d=state.images&&state.images[m[1]];if(d)out[m[1]]=d;}
+  return out;
+}
+function longShareLink(){
   const f=currentFile();if(!f)return location.href;
   const payload=JSON.stringify({n:f.name,c:$('#editor').value||''});
   const b64=btoa(unescape(encodeURIComponent(payload))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   return location.origin+location.pathname+'#doc='+b64;
+}
+async function publishShare(name,content){
+  if(!SB_URL||!SB_KEY)return'';
+  if(navigator.onLine===false)return'';
+  for(let attempt=0;attempt<3;attempt++){
+    const id=shortId(SHARE_ID_LEN);
+    try{
+      const r=await fetch(SB_URL+'/rest/v1/shares',{method:'POST',
+        headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json',Prefer:'return=minimal'},
+        body:JSON.stringify({id,name:(name||'Shared note').slice(0,200),content:content||'',images:shareImages(content)})});
+      if(r.ok)return location.origin+location.pathname+'#s='+id;
+      if(r.status===409)continue;                    // id already taken — roll another one
+      console.warn('Scribbly: short link unavailable (HTTP '+r.status+')');
+      return'';
+    }catch(e){return'';}
+  }
+  return'';
+}
+/* one link per (note, exact text): clicking Share twice without editing
+   reuses the link instead of filling the table with duplicate rows */
+let shareCache={key:'',url:''},sharePending=null;
+function shareKey(){const f=currentFile();return f?f.id+' '+f.name+' '+($('#editor').value||''):'';}
+function cachedShareUrl(){const k=shareKey();return k&&shareCache.key===k?shareCache.url:'';}
+function prepareShareLink(){
+  const key=shareKey();
+  if(!key)return Promise.resolve(location.href);
+  if(shareCache.key===key)return Promise.resolve(shareCache.url);
+  if(sharePending&&sharePending.key===key)return sharePending.p;
+  const f=currentFile();
+  const p=publishShare(f.name,$('#editor').value||'')
+    .then(u=>{const url=u||longShareLink();shareCache={key,url};sharePending=null;return url;});
+  sharePending={key,p};
+  return p;
+}
+/* Nothing above runs until you pick a share option that actually carries a link.
+   Opening the Share sheet, saving a PDF, downloading a .txt — none of those
+   publish anything. One link per note per edit, made at the moment you ask. */
+function withShareLink(fn){
+  const ready=cachedShareUrl();
+  if(ready)return fn(ready);
+  toast('Making a short link…');
+  prepareShareLink().then(fn);
+}
+/* A pop-up must be claimed during the click itself, so open the tab first and
+   point it at the link once there is one. */
+function shareToSite(buildUrl){
+  const ready=cachedShareUrl();
+  if(ready){window.open(buildUrl(ready),'_blank');return;}
+  const w=window.open('','_blank');
+  toast('Making a short link…');
+  prepareShareLink().then(u=>{
+    const target=buildUrl(u);
+    if(w&&!w.closed)w.location.href=target;else window.open(target,'_blank');
+  });
 }
 function buildExportHTML(name,content){
   const body=render(content||'');
@@ -1305,13 +1381,29 @@ async function shareNative(){
     const html=buildExportHTML(f.name,$('#editor').value);
     const file=new File([html],(f.name||'note')+'.html',{type:'text/html'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:f.name,text:'📝 '+f.name});}
-    else{await navigator.share({title:f.name,text:shareText(),url:shareLink()});}
+    else{await navigator.share({title:f.name,text:shareText(),url:cachedShareUrl()||longShareLink()});}
   }catch(e){}
 }
-function shareWA(){window.open('https://wa.me/?text='+encodeURIComponent(shareText()+'\n\n'+shareLink()),'_blank');}
-function shareTG(){window.open('https://t.me/share/url?url='+encodeURIComponent(shareLink())+'&text='+encodeURIComponent(shareText()),'_blank');}
-function shareMail(){const f=currentFile();location.href='mailto:?subject='+encodeURIComponent(f.name)+'&body='+encodeURIComponent(shareText()+'\n\n'+shareLink());}
-function shareCopyLink(){copy(shareLink(),'Link copied — anyone with it sees your note ✓');}
+function shareWA(){shareToSite(u=>'https://wa.me/?text='+encodeURIComponent(shareText()+'\n\n'+u));}
+function shareTG(){shareToSite(u=>'https://t.me/share/url?url='+encodeURIComponent(u)+'&text='+encodeURIComponent(shareText()));}
+function shareMail(){const f=currentFile();withShareLink(u=>{location.href='mailto:?subject='+encodeURIComponent(f.name)+'&body='+encodeURIComponent(shareText()+'\n\n'+u);});}
+function shareCopyLink(){
+  const msg='Link copied — anyone with it sees your note ✓';
+  const ready=cachedShareUrl();
+  if(ready)return copy(ready,msg);
+  // Safari revokes clipboard permission across an await; handing it the pending
+  // text instead keeps the write attached to the click that started it.
+  if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+    const blob=prepareShareLink().then(u=>new Blob([u],{type:'text/plain'}));
+    navigator.clipboard.write([new ClipboardItem({'text/plain':blob})])
+      .then(()=>toast(msg))
+      .catch(()=>blob.then(b=>b.text()).then(u=>copy(u,msg)));
+    toast('Making a short link…');
+    return;
+  }
+  toast('Making a short link…');
+  prepareShareLink().then(u=>copy(u,msg));
+}
 function shareCopyText(){copy($('#editor').value||'','Note text copied ✓');}
 function shareDownloadHTML(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.html',buildExportHTML(f.name,$('#editor').value),'text/html');toast('Webpage downloaded ✓');closeModal('shareModal');}
 function shareDownloadMD(){const f=currentFile();downloadFile((f.name.replace(/\.\w+$/,'')||'note')+'.md',$('#editor').value||'','text/markdown');toast('Markdown downloaded ✓');closeModal('shareModal');}
@@ -1681,19 +1773,51 @@ async function signOut(){
 }
 
 /* ======================= SHARED-LINK VIEWER ======================= */
-function openSharedFromHash(){
-  const m=location.hash.match(/^#doc=(.+)$/);if(!m)return false;
+/* two link shapes reach here:
+     #s=k3Rt9wQ  — short link; the note is fetched by id
+     #doc=<b64>  — the whole note in the URL; every link shared before short
+                   links existed looks like this and must keep working */
+function sharedHash(){const m=(location.hash||'').match(/^#(s|doc)=([^&]+)$/);return m?{kind:m[1],val:m[2]}:null;}
+function sharedSheet(){return $('#sharedView').querySelector('#preview');}
+function showShared(name,content,images){
+  if(images)state.images=Object.assign({},state.images||{},images);   // in memory only — never saved over the reader's own notes
+  document.title=(name||'Shared note')+' · Scribbly';
+  $('#sharedName').textContent=name||'Shared note';
+  sharedSheet().innerHTML=render(content||'');
+  $('#sharedView').classList.add('on');
+}
+function showSharedMessage(title,msg){
+  document.title='Scribbly';
+  $('#sharedName').textContent=title;
+  sharedSheet().innerHTML='<p>'+escapeHtml(msg)+'</p>';
+  $('#sharedView').classList.add('on');
+}
+function openDocHash(b64){
   try{
-    let b64=m[1].replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';
-    const data=JSON.parse(decodeURIComponent(escape(atob(b64))));
-    document.title=data.n+' · Scribbly';
-    $('#sharedName').textContent=data.n||'Shared note';
-    $('#sharedView').querySelector('#preview').innerHTML=render(data.c||'');
-    $('#sharedView').classList.add('on');
+    let s=b64.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';
+    const data=JSON.parse(decodeURIComponent(escape(atob(s))));
+    showShared(data.n,data.c);
     return true;
   }catch(e){return false;}
 }
-function exitShared(){location.hash='';$('#sharedView').classList.remove('on');}
+async function openShortShare(id){
+  if(!SHARE_ID_RE.test(id)||!SB_URL||!SB_KEY){showSharedMessage('Broken link','That share link is not valid.');return;}
+  showSharedMessage('Opening…','Fetching the shared note.');
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/shares?select=name,content,images&id=eq.'+encodeURIComponent(id),
+      {headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const rows=await r.json();
+    if(!rows.length){showSharedMessage('Not found','This shared note no longer exists, or the link was mistyped.');return;}
+    showShared(rows[0].name,rows[0].content,rows[0].images);
+  }catch(e){
+    showSharedMessage('Could not open','Could not reach the note — check your connection and reload.');
+  }
+}
+/* the app never finished booting behind this view (boot() returns early on a
+   share link), so leave it by loading the app fresh rather than un-hiding a
+   half-built page */
+function exitShared(){location.replace(location.origin+location.pathname);}
 
 /* ======================= SEED ======================= */
 function seed(){
@@ -1712,7 +1836,7 @@ function seed(){
     'Turn text into a diagram:','Just type arrows and it draws itself —','','Idea -> Draft -> Review -> Publish','',
     '> Quotes look like this — great for the one line you want to remember.','',
     'Folders & files:','Use the left panel to make folders and files. Drag a file onto a folder to move it.','',
-    'Sharing:','Hit Share for WhatsApp, Telegram, a copy-able link, a .txt, or a PDF.','',
+    'Sharing:','Hit Share for WhatsApp, Telegram, a .txt or a PDF — or Copy link for a short link that opens the note anywhere.','',
     'Now delete this and start writing ✎'].join('\n');
   // Start clean: just two reference notes, no folders to clear out.
   return {id:'root',name:'root',type:'folder',children:[
@@ -1723,10 +1847,12 @@ function seed(){
 /* ======================= BOOT ======================= */
 function boot(){
   // shared read-only link?
-  if(location.hash.indexOf('#doc=')===0){
+  const sh=sharedHash();
+  if(sh){
     const saved=load();state.theme=(saved&&saved.theme)||'notebook';state.font=(saved&&saved.font)||'hand';
     applyTheme();applyFont();
-    if(openSharedFromHash())return;
+    if(sh.kind==='s'){openShortShare(sh.val);return;}
+    if(openDocHash(sh.val))return;       // unreadable #doc= link falls through to the normal app
   }
   const saved=load();
   if(saved){
@@ -1773,7 +1899,7 @@ function boot(){
   window.addEventListener('beforeunload',flushSave);
   window.addEventListener('pagehide',flushSave);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSave();});
-  window.addEventListener('hashchange',()=>{if(location.hash.indexOf('#doc=')===0)openSharedFromHash();else if($('#sharedView').classList.contains('on'))location.reload();});
+  window.addEventListener('hashchange',()=>{const h=sharedHash();if(h)location.reload();else if($('#sharedView').classList.contains('on'))location.reload();});
   // installable-app (PWA): only active when hosted over http/https
   if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
     navigator.serviceWorker.register('service-worker.js').catch(()=>{});
