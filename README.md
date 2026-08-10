@@ -36,6 +36,8 @@ interview prep — HLD system design, DSA, and the like).
   Copy-link gives a short link (`…/#s=k3Rt9wQ`), the same length however long the note is.
 - **Offline & installable (PWA)** — works without a connection; "Add to Home Screen" on mobile.
 - **Local-first** — notes auto-save to your browser; **Backup / Restore** as a JSON file.
+- **Import** — drop in existing `.txt`/`.md` files and they become notes, auto-formatted the
+  same as anything typed by hand.
 
 ## Run it locally
 

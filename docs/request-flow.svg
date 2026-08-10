@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="720" viewBox="0 0 1500 720" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="1500" height="720" fill="#ffffff"/>
+
+  <text x="50" y="48" font-size="28" font-weight="700" fill="#0f172a">Scribbly — Request / Response Flow</text>
+  <text x="50" y="78" font-size="15" fill="#64748b">Most actions never leave the browser. Only the shaded steps touch the network.</text>
+
+  <!-- ================= ROW 1 : typing ================= -->
+  <text x="50" y="124" font-size="13" font-weight="700" letter-spacing="0.5" fill="#1d4ed8">1 · TYPING A NOTE — no network at all</text>
+
+  <rect x="50" y="138" width="252" height="102" rx="9" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="176" y="180" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">keystroke</text>
+  <text x="176" y="203" font-size="11.5" fill="#475569" text-anchor="middle">in the &lt;textarea&gt;</text>
+
+  <rect x="332" y="138" width="252" height="102" rx="9" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="458" y="172" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">onEdit()</text>
+  <text x="458" y="195" font-size="11.5" fill="#475569" text-anchor="middle">save an undo step,</text>
+  <text x="458" y="214" font-size="11.5" fill="#475569" text-anchor="middle">repaint the preview</text>
+
+  <rect x="614" y="138" width="252" height="102" rx="9" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="740" y="172" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">wait 350 ms</text>
+  <text x="740" y="195" font-size="11.5" fill="#475569" text-anchor="middle">debounce — one write</text>
+  <text x="740" y="214" font-size="11.5" fill="#475569" text-anchor="middle">instead of fifty</text>
+
+  <rect x="896" y="138" width="252" height="102" rx="9" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="1022" y="172" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">commitEdit()</text>
+  <text x="1022" y="195" font-size="11.5" fill="#475569" text-anchor="middle">writes to the note id</text>
+  <text x="1022" y="214" font-size="11.5" fill="#475569" text-anchor="middle">captured when you typed</text>
+
+  <rect x="1178" y="138" width="252" height="102" rx="9" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="1304" y="180" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">localStorage</text>
+  <text x="1304" y="203" font-size="11.5" fill="#475569" text-anchor="middle">'scribbly_v2' · saved</text>
+
+  <line x1="306" y1="189" x2="326" y2="189" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="588" y1="189" x2="608" y2="189" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="870" y1="189" x2="890" y2="189" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="1152" y1="189" x2="1172" y2="189" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ================= ROW 2 : sync ================= -->
+  <text x="50" y="304" font-size="13" font-weight="700" letter-spacing="0.5" fill="#6d28d9">2 · SYNC — only if signed in</text>
+
+  <rect x="50" y="318" width="252" height="102" rx="9" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="176" y="360" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">touch()</text>
+  <text x="176" y="383" font-size="11.5" fill="#475569" text-anchor="middle">marks the workspace dirty</text>
+
+  <rect x="332" y="318" width="252" height="102" rx="9" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="458" y="360" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">wait 1.4 s</text>
+  <text x="458" y="383" font-size="11.5" fill="#475569" text-anchor="middle">debounce the upload</text>
+
+  <rect x="614" y="318" width="252" height="102" rx="9" fill="#ddd0fb" stroke="#7c3aed" stroke-width="2"/>
+  <text x="740" y="352" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">UPSERT workspaces</text>
+  <text x="740" y="375" font-size="11.5" fill="#475569" text-anchor="middle">the whole tree as</text>
+  <text x="740" y="394" font-size="11.5" fill="#475569" text-anchor="middle">one JSON row</text>
+
+  <rect x="896" y="318" width="252" height="102" rx="9" fill="#ddd0fb" stroke="#7c3aed" stroke-width="2"/>
+  <text x="1022" y="352" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">Postgres checks RLS</text>
+  <text x="1022" y="375" font-size="11.5" fill="#475569" text-anchor="middle">user_id = auth.uid()</text>
+  <text x="1022" y="394" font-size="11.5" fill="#475569" text-anchor="middle">or the write is refused</text>
+
+  <rect x="1178" y="318" width="252" height="102" rx="9" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="1304" y="360" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">synced</text>
+  <text x="1304" y="383" font-size="11.5" fill="#475569" text-anchor="middle">status dot turns green</text>
+
+  <line x1="306" y1="369" x2="326" y2="369" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="588" y1="369" x2="608" y2="369" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="870" y1="369" x2="890" y2="369" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="1152" y1="369" x2="1172" y2="369" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ================= ROW 3 : share ================= -->
+  <text x="50" y="484" font-size="13" font-weight="700" letter-spacing="0.5" fill="#15803d">3 · SHARING A NOTE</text>
+
+  <rect x="50" y="498" width="252" height="102" rx="9" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="176" y="532" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">click Copy link</text>
+  <text x="176" y="555" font-size="11.5" fill="#475569" text-anchor="middle">the only action that</text>
+  <text x="176" y="574" font-size="11.5" fill="#475569" text-anchor="middle">publishes anything</text>
+
+  <rect x="332" y="498" width="252" height="102" rx="9" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="458" y="540" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">shortId(7)</text>
+  <text x="458" y="563" font-size="11.5" fill="#475569" text-anchor="middle">random id, e.g. k3Rt9wQ</text>
+
+  <rect x="614" y="498" width="252" height="102" rx="9" fill="#cdeed8" stroke="#16a34a" stroke-width="2"/>
+  <text x="740" y="532" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">POST /shares</text>
+  <text x="740" y="555" font-size="11.5" fill="#475569" text-anchor="middle">snapshot of the note</text>
+  <text x="740" y="574" font-size="11.5" fill="#475569" text-anchor="middle">409 → retry a new id</text>
+
+  <rect x="896" y="498" width="252" height="102" rx="9" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="1022" y="532" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">link is ~40 chars</text>
+  <text x="1022" y="555" font-size="11.5" fill="#475569" text-anchor="middle">…/#s=k3Rt9wQ</text>
+  <text x="1022" y="574" font-size="11.5" fill="#475569" text-anchor="middle">same length for any note</text>
+
+  <rect x="1178" y="498" width="252" height="102" rx="9" fill="#cdeed8" stroke="#16a34a" stroke-width="2"/>
+  <text x="1304" y="532" font-size="14.5" font-weight="600" fill="#0f172a" text-anchor="middle">reader: GET by id</text>
+  <text x="1304" y="555" font-size="11.5" fill="#475569" text-anchor="middle">renders read-only;</text>
+  <text x="1304" y="574" font-size="11.5" fill="#475569" text-anchor="middle">missing id → a message</text>
+
+  <line x1="306" y1="549" x2="326" y2="549" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="588" y1="549" x2="608" y2="549" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="870" y1="549" x2="890" y2="549" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="1152" y1="549" x2="1172" y2="549" stroke="#94a3b8" stroke-width="2" marker-end="url(#a2)"/>
+
+  <line x1="50" y1="642" x2="1450" y2="642" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="50" y="672" font-size="12.5" fill="#475569">Darker boxes are the only network calls. If the network is down, Copy link falls back to the old long link rather than failing — and links shared before still open.</text>
+</svg>

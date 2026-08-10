@@ -71,7 +71,7 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
   box-shadow:2px 2px 0 var(--pink)}
 .tag{font-family:var(--font-clean); font-size:12.5px; color:var(--muted); margin-top:6px}
 .doodle{position:absolute; opacity:.85; pointer-events:none}
-.side-actions{display:flex; gap:8px; padding:8px 14px 12px}
+.side-actions{display:flex; flex-wrap:wrap; gap:8px; padding:8px 14px 12px}
 .side-actions button{
   flex:1; padding:9px 6px; font-size:14.5px; background:var(--paper2); color:var(--ink);
   border:2.5px solid var(--ink); border-radius:200px 12px 200px 12px/12px 200px 12px 200px;
@@ -297,7 +297,9 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
     <div class="side-actions">
       <button onclick="startCreate('file')" title="New file at top level">📄 File</button>
       <button onclick="startCreate('folder')" title="New folder at top level">📁 Folder</button>
+      <button onclick="pickImport()" title="Import .txt or .md files as notes">📥 Import</button>
     </div>
+    <input type="file" id="importInput" accept=".txt,.md,.markdown,text/plain,text/markdown" multiple style="display:none" onchange="importFiles(this.files);this.value='';">
     <div id="tree"></div>
   </aside>
   <div id="scrim" onclick="toggleSidebar(false)"></div>
@@ -767,6 +769,36 @@ function openFile(id){
   if(window.innerWidth<=760)toggleSidebar(false);
 }
 function clearEditor(){$('#editor').value='';$('#fileTitle').value='';$('#preview').innerHTML='<div class="doc-empty">Pick a file or create one to start writing ✎</div>';$('#counts').textContent='0 words · 0 chars';}
+
+/* ======================= IMPORT NOTES ======================= */
+/* a .txt/.md file becomes a note the same way anything typed does — the
+   content lands in node.content untouched, and openFile() below runs it
+   through the same render() auto-formatter every other note uses */
+const IMPORT_MAX_BYTES=2*1024*1024;   // keep imports well inside localStorage's practical quota
+const IMPORT_EXT_RE=/\.(txt|md|markdown)$/i;
+function pickImport(){$('#importInput').click();}
+function looksImportable(file){return IMPORT_EXT_RE.test(file.name)||file.type.indexOf('text')===0;}
+async function importFiles(fileList){
+  const all=Array.from(fileList||[]);
+  const files=all.filter(looksImportable);
+  if(!files.length){toast(all.length?'Only .txt and .md files can be imported':'Pick a file to import');return;}
+  const notes=[];
+  for(const file of files){
+    if(file.size>IMPORT_MAX_BYTES){toast('"'+file.name+'" is too large to import (2MB max)');continue;}
+    let text;try{text=await file.text();}catch(e){toast('Could not read "'+file.name+'"');continue;}
+    notes.push({id:uid(),name:file.name.replace(IMPORT_EXT_RE,'')||'Untitled',type:'file',content:text});
+  }
+  if(!notes.length)return;
+  let openId;
+  if(notes.length===1){
+    state.tree.children.push(notes[0]);openId=notes[0].id;
+  }else{
+    const folder={id:uid(),name:'📥 Imported '+new Date().toLocaleDateString(),type:'folder',children:notes};
+    state.tree.children.push(folder);state.expanded[folder.id]=true;openId=notes[0].id;
+  }
+  save();touch();renderTree();openFile(openId);
+  toast(notes.length===1?'Note imported ✓':notes.length+' notes imported ✓');
+}
 
 /* ---------- editor wiring ---------- */
 let saveTimer=null,pendingSave=null;

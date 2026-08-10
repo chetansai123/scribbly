@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1010" viewBox="0 0 1500 1010" font-family="Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="1500" height="1010" fill="#ffffff"/>
+
+  <!-- ============ header ============ -->
+  <text x="50" y="54" font-size="30" font-weight="700" fill="#0f172a">Scribbly — System Architecture</text>
+  <text x="50" y="86" font-size="16" fill="#64748b">Local-first notes PWA · vanilla JS · no build step · Supabase only as an optional add-on</text>
+
+  <!-- ============ hosting strip ============ -->
+  <rect x="50" y="112" width="1400" height="66" rx="10" fill="#0f172a"/>
+  <text x="76" y="141" font-size="15" font-weight="700" fill="#ffffff">VERCEL — static hosting</text>
+  <text x="76" y="163" font-size="13" fill="#94a3b8">Serves 4 plain files: index.html · manifest.json · service-worker.js · icon.svg  —  no build step, no server code of my own</text>
+
+  <line x1="240" y1="178" x2="240" y2="224" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="252" y="207" font-size="12" fill="#64748b">first load</text>
+
+  <!-- ============ browser zone ============ -->
+  <rect x="50" y="228" width="740" height="616" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="74" y="263" font-size="15" font-weight="700" fill="#334155">YOUR BROWSER — the whole app runs here</text>
+
+  <!-- UI layer -->
+  <rect x="76" y="284" width="688" height="136" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="94" y="309" font-size="12" font-weight="700" letter-spacing="1" fill="#64748b">UI LAYER</text>
+  <rect x="94" y="320" width="214" height="84" rx="8" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="201" y="354" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">Sidebar tree</text>
+  <text x="201" y="376" font-size="11.5" fill="#475569" text-anchor="middle">folders · files · drag to move</text>
+  <rect x="320" y="320" width="214" height="84" rx="8" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="427" y="354" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">&lt;textarea&gt; editor</text>
+  <text x="427" y="376" font-size="11.5" fill="#475569" text-anchor="middle">always plain text</text>
+  <rect x="546" y="320" width="214" height="84" rx="8" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="653" y="354" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">Live preview</text>
+  <text x="653" y="376" font-size="11.5" fill="#475569" text-anchor="middle">HTML + hand-drawn SVG</text>
+
+  <!-- App core -->
+  <rect x="76" y="436" width="688" height="166" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="94" y="461" font-size="12" font-weight="700" letter-spacing="1" fill="#64748b">APP CORE — plain JS, no framework</text>
+  <rect x="94" y="472" width="158" height="112" rx="8" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="173" y="506" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">state</text>
+  <text x="173" y="528" font-size="11.5" fill="#475569" text-anchor="middle">the note tree</text>
+  <text x="173" y="548" font-size="11.5" fill="#475569" text-anchor="middle">source of truth</text>
+  <rect x="264" y="472" width="158" height="112" rx="8" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="343" y="506" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">render()</text>
+  <text x="343" y="528" font-size="11.5" fill="#475569" text-anchor="middle">text → HTML</text>
+  <text x="343" y="548" font-size="11.5" fill="#475569" text-anchor="middle">custom parser</text>
+  <rect x="434" y="472" width="158" height="112" rx="8" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="513" y="506" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">undo history</text>
+  <text x="513" y="528" font-size="11.5" fill="#475569" text-anchor="middle">per note</text>
+  <text x="513" y="548" font-size="11.5" fill="#475569" text-anchor="middle">100 steps</text>
+  <rect x="604" y="472" width="158" height="112" rx="8" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="683" y="506" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">voice typing</text>
+  <text x="683" y="528" font-size="11.5" fill="#475569" text-anchor="middle">Web Speech API</text>
+  <text x="683" y="548" font-size="11.5" fill="#475569" text-anchor="middle">built into browser</text>
+
+  <!-- Persistence -->
+  <rect x="76" y="618" width="688" height="136" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="94" y="643" font-size="12" font-weight="700" letter-spacing="1" fill="#64748b">PERSISTENCE</text>
+  <rect x="94" y="654" width="329" height="84" rx="8" fill="#fdf3d9" stroke="#d97706"/>
+  <text x="258" y="688" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">localStorage — 'scribbly_v2'</text>
+  <text x="258" y="710" font-size="11.5" fill="#475569" text-anchor="middle">whole workspace as one JSON blob</text>
+  <rect x="435" y="654" width="329" height="84" rx="8" fill="#fdf3d9" stroke="#d97706"/>
+  <text x="599" y="688" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">Service Worker cache</text>
+  <text x="599" y="710" font-size="11.5" fill="#475569" text-anchor="middle">app opens + edits with no internet</text>
+
+  <line x1="76" y1="778" x2="764" y2="778" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="94" y="806" font-size="12.5" fill="#475569">No account needed · works fully offline · notes never leave this device unless you sign in</text>
+
+  <!-- ============ Supabase zone ============ -->
+  <rect x="980" y="228" width="470" height="470" rx="14" fill="#f7f5fd" stroke="#a78bfa" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="1004" y="263" font-size="15" font-weight="700" fill="#6d28d9">SUPABASE — optional</text>
+
+  <rect x="1006" y="284" width="418" height="110" rx="8" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="1030" y="317" font-size="14" font-weight="600" fill="#0f172a">Auth</text>
+  <text x="1030" y="340" font-size="11.5" fill="#475569">Google · email + password</text>
+  <text x="1030" y="362" font-size="11.5" fill="#475569">returns a session token (JWT)</text>
+
+  <rect x="1006" y="410" width="418" height="130" rx="8" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="1030" y="443" font-size="14" font-weight="600" fill="#0f172a">workspaces — table</text>
+  <text x="1030" y="466" font-size="11.5" fill="#475569">one row per user</text>
+  <text x="1030" y="487" font-size="11.5" fill="#475569">user_id · data (jsonb) · updated_at</text>
+  <text x="1030" y="508" font-size="11.5" fill="#6d28d9">RLS: you can touch only your own row</text>
+
+  <rect x="1006" y="556" width="418" height="126" rx="8" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="1030" y="589" font-size="14" font-weight="600" fill="#0f172a">shares — table</text>
+  <text x="1030" y="612" font-size="11.5" fill="#475569">one row per share link</text>
+  <text x="1030" y="633" font-size="11.5" fill="#475569">id (7 chars) · name · content · images</text>
+  <text x="1030" y="654" font-size="11.5" fill="#6d28d9">RLS: read + insert only — never update/delete</text>
+
+  <!-- ============ Anthropic zone ============ -->
+  <rect x="980" y="756" width="470" height="120" rx="14" fill="#fef6ee" stroke="#fb923c" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="1004" y="790" font-size="14" font-weight="700" fill="#c2410c">ANTHROPIC API — optional</text>
+  <text x="1004" y="816" font-size="11.5" fill="#475569">screenshot → diagram, called straight from the browser</text>
+  <text x="1004" y="838" font-size="11.5" fill="#475569">with the user's own API key — there is no server</text>
+  <text x="1004" y="860" font-size="11.5" fill="#475569">to hide a shared one in</text>
+
+  <!-- ============ cross-boundary arrows ============ -->
+  <line x1="792" y1="332" x2="974" y2="332" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="883" y="320" font-size="12" fill="#475569" text-anchor="middle">sign in</text>
+
+  <line x1="792" y1="472" x2="974" y2="472" stroke="#64748b" stroke-width="2" marker-start="url(#arw)" marker-end="url(#arw)"/>
+  <text x="883" y="454" font-size="12" fill="#475569" text-anchor="middle">sync workspace JSON</text>
+  <text x="883" y="492" font-size="11" fill="#94a3b8" text-anchor="middle">push 1.4 s after an edit</text>
+  <text x="883" y="508" font-size="11" fill="#94a3b8" text-anchor="middle">pull on login</text>
+
+  <line x1="792" y1="612" x2="974" y2="612" stroke="#64748b" stroke-width="2" marker-start="url(#arw)" marker-end="url(#arw)"/>
+  <text x="883" y="594" font-size="12" fill="#475569" text-anchor="middle">share link</text>
+  <text x="883" y="632" font-size="11" fill="#94a3b8" text-anchor="middle">POST on Copy link</text>
+  <text x="883" y="648" font-size="11" fill="#94a3b8" text-anchor="middle">GET when opened</text>
+
+  <line x1="792" y1="816" x2="974" y2="816" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <text x="883" y="804" font-size="12" fill="#475569" text-anchor="middle">screenshot</text>
+
+  <!-- ============ legend ============ -->
+  <rect x="50" y="906" width="16" height="16" rx="4" fill="#e8f1fd" stroke="#3b82f6"/>
+  <text x="76" y="919" font-size="12.5" fill="#475569">UI</text>
+  <rect x="130" y="906" width="16" height="16" rx="4" fill="#e7f6ec" stroke="#16a34a"/>
+  <text x="156" y="919" font-size="12.5" fill="#475569">App core</text>
+  <rect x="250" y="906" width="16" height="16" rx="4" fill="#fdf3d9" stroke="#d97706"/>
+  <text x="276" y="919" font-size="12.5" fill="#475569">Storage</text>
+  <rect x="370" y="906" width="16" height="16" rx="4" fill="#efe9fb" stroke="#7c3aed"/>
+  <text x="396" y="919" font-size="12.5" fill="#475569">Cloud (optional)</text>
+  <rect x="540" y="906" width="16" height="16" rx="4" fill="#fef6ee" stroke="#fb923c"/>
+  <text x="566" y="919" font-size="12.5" fill="#475569">External (optional)</text>
+
+  <text x="50" y="962" font-size="12.5" fill="#94a3b8">Dashed borders mean optional. Switch off everything on the right and the app still opens, edits, saves and works offline.</text>
+</svg>
