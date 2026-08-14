@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Scribbly — notes that draw themselves</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#e04f3d">
@@ -55,7 +55,9 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 .sketch2{border:2.5px solid var(--ink); border-radius:14px 230px 16px 250px/240px 15px 220px 14px}
 
 /* ======================= SHELL ======================= */
-#app{display:flex; height:100vh; overflow:hidden; gap:10px; padding:10px}
+/* dvh, not vh: on phones vh counts the space behind Safari's toolbars, so the
+   status bar ends up under the chrome and the last line is unreachable */
+#app{display:flex; height:100vh; height:100dvh; overflow:hidden; gap:10px; padding:10px}
 
 /* ---- Sidebar (a taped-up notebook) ---- */
 #sidebar{
@@ -133,10 +135,15 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 #editor{width:100%; min-height:calc(100% - 32px); border:none; outline:none; resize:none; color:var(--ink);
   font-family:var(--font-hand); font-size:19px; line-height:32px; padding:8px 26px 140px 66px; tab-size:2;
+  overflow-wrap:anywhere;
   background:repeating-linear-gradient(var(--paper) 0 31px, var(--rule) 31px 32px)}
 [data-font="clean"] #editor{font-family:var(--font-clean)}
 #previewWrap{background-image:radial-gradient(var(--faint) 1px,transparent 1px); background-size:22px 22px}
-#preview{padding:14px 40px 150px 66px; max-width:900px}
+/* overflow-wrap:anywhere — a pasted job/tracking URL is one unbreakable "word"
+   hundreds of characters long; without this it pushes the page sideways and the
+   note scrolls horizontally. Code blocks are white-space:pre so they keep
+   scrolling in their own box instead of breaking. */
+#preview{padding:14px 40px 150px 66px; max-width:900px; overflow-wrap:anywhere}
 .mode-write #previewWrap{display:none}
 .mode-write #editorWrap{border-right:none}
 .mode-read #editorWrap{display:none}
@@ -163,15 +170,21 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 #preview del{color:var(--muted)}
 #preview a{color:var(--link); text-decoration:underline wavy var(--link) 1px; text-underline-offset:3px}
 #preview mark{background:linear-gradient(105deg,transparent 2%,var(--mark) 2% 98%,transparent 98%); color:inherit; padding:.05em .15em}
-#fmtBar{position:sticky; top:31px; z-index:3; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+/* one scrolling row at every size. Wrapping depended on the *pane* width, not
+   the window, so in split view it stacked into two or three rows on screens a
+   media query still calls "desktop". */
+#fmtBar{position:sticky; top:31px; z-index:3; display:flex; align-items:center; gap:6px;
+  flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:none;
   padding:6px 22px 7px 66px; background:var(--paper); border-bottom:1px dashed var(--line)}
+#fmtBar::-webkit-scrollbar{display:none}
+#fmtBar button{flex:none}
+.fmt-sep{flex:none}
 #fmtBar button{font-family:var(--font-clean); font-size:12.5px; line-height:1; color:var(--ink);
   background:var(--paper2); border:2px solid var(--ink); border-radius:9px 4px 9px 4px/4px 9px 4px 9px;
   padding:6px 10px; min-height:30px; box-shadow:1.5px 1.5px 0 var(--line2); transition:.12s; cursor:pointer}
 #fmtBar button:hover{transform:translate(-1px,-1px); box-shadow:2.5px 2.5px 0 var(--accent); color:var(--accent)}
 #fmtBar button:active{transform:translate(1px,1px); box-shadow:none}
 .fmt-sep{width:1px; height:20px; background:var(--line2); margin:0 3px}
-@media(max-width:760px){#fmtBar{padding-left:22px} #fmtBar button{min-height:38px; padding:8px 11px}}
 #undoBtn,#redoBtn{font-size:19px; line-height:1; min-width:38px}
 #undoBtn[disabled],#redoBtn[disabled]{opacity:.32; cursor:default; box-shadow:none; transform:none}
 #preview ul,#preview ol{margin:.5em 0; padding-left:2.4em; line-height:1.75; font-size:1.12rem}
@@ -186,6 +199,11 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 #preview ul li::before{content:"✦"; position:absolute; left:-1.25em; color:var(--pink); font-size:.95em}
 #preview li.task{list-style:none}
 #preview li.task::before{content:none}
+/* the tick keeps its own gutter and the text hangs beside it — otherwise a long
+   URL can't fit next to the box and gets pushed onto a line of its own, so a
+   list of links ends up half aligned and half not */
+#preview li.task{display:flex; align-items:flex-start}
+#preview li.task>.cbx{flex:none; margin-top:.16em}
 #preview .cbx{display:inline-flex; width:1.2em; height:1.2em; margin-right:.45em; vertical-align:-3px;
   border:2.5px solid var(--line2); border-radius:6px 3px 6px 3px; align-items:center; justify-content:center;
   color:var(--green); font-size:.8em; background:var(--paper2)}
@@ -261,27 +279,112 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
 #sharedView.on{display:block}
 #sharedView .sheet{max-width:840px; margin:26px auto; background:var(--paper); border:2.5px solid var(--ink);
   border-radius:8px 20px 8px 20px/20px 8px 20px 8px; box-shadow:var(--shadow); padding:34px 44px 60px}
-#sharedView .barx{max-width:840px; margin:0 auto 0; display:flex; justify-content:space-between; align-items:center; padding:16px 8px 0}
-#sharedView .barx .n{font-family:var(--font-head); font-size:26px; color:var(--accent)}
+/* the sheet already supplies the page margin — without this reset the note also
+   carries the editor's 66px gutter and reads in a column half the sheet wide */
+#sharedView #preview{max-width:none; padding:0}
+#sharedView .barx{max-width:840px; margin:0 auto 0; display:flex; justify-content:space-between;
+  align-items:center; gap:12px; padding:16px 8px 0}
+#sharedView .barx .n{font-family:var(--font-head); font-size:26px; color:var(--accent);
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#sharedView .barx .tbtn{flex:none}
 
 #toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(30px); background:var(--ink); color:var(--paper);
   padding:11px 20px; border-radius:12px; font-family:var(--font-clean); font-size:14px; opacity:0; pointer-events:none; transition:.25s; z-index:99; box-shadow:var(--shadow)}
 #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
-@media(max-width:760px){
-  #app{padding:6px; gap:0}
-  #sidebar{position:fixed; z-index:40; height:calc(100% - 12px); box-shadow:var(--shadow); transform:translateX(-115%); transition:.2s; top:6px; left:6px}
+/* ======================= RESPONSIVE =======================
+   Three shapes, one identity:
+     desktop  >1100px   — every action on the bar, sidebar pinned open
+     tablet   761–1100  — secondary actions fold into ⋯; under 900px the
+                          sidebar slides over the page so the panes keep width
+     phone    ≤760px    — one compact action row, and no split view: 375px
+                          cannot hold two readable columns
+   ------------------------------------------------------------------------ */
+
+/* ---- the ⋯ sheet takes over once the bar would wrap ---- */
+#moreBtn{display:none}
+.tb-break{display:none; flex-basis:100%; height:0}
+.more-list .mi-em{font-size:20px; line-height:1; flex:none; width:26px; text-align:center}
+.more-list button{display:flex; align-items:center; gap:12px}
+.more-list .mi-t{flex:1; min-width:0}
+@media(max-width:1100px){
+  #topbar .secondary{display:none}
+  #moreBtn{display:block; margin-left:auto}
+}
+
+/* ---- tablet: sidebar becomes a drawer so split panes stay readable ---- */
+@media(max-width:900px){
+  #app{gap:0}
+  #sidebar{position:fixed; z-index:40; width:min(300px,82vw); height:calc(100% - 12px);
+    box-shadow:var(--shadow); transform:translateX(-115%); transition:transform .2s; top:6px; left:6px}
   #sidebar.open{transform:none}
   #burger{display:block}
-  #work{flex-direction:column}
-  #editorWrap{border-right:none; border-bottom:2.5px dashed var(--line2)}
   #scrim{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:39; display:none}
   #scrim.on{display:block}
-  /* touch targets: phones have no Ctrl+Z, so these buttons are the only undo */
-  #undoBtn,#redoBtn{min-width:44px; min-height:44px; font-size:21px}
-  .mode-read #preview{padding:14px 20px 120px 20px}
+  #editor{padding-left:52px} #editorWrap{background-position:40px 0}
+  .pane-label,#fmtBar{padding-left:52px}
+  #preview{padding:14px 26px 130px 34px}
+  .mode-read #preview{padding:14px 34px 130px 34px}
+}
+
+/* ---- phone ---- */
+@media(max-width:760px){
+  #app{padding:6px; padding-top:calc(6px + env(safe-area-inset-top));
+    padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+  #topbar{gap:7px; padding:8px 9px}
+  .tb-break{display:block}                      /* title gets a row to itself */
+  .file-title{font-size:25px; min-width:0}
+  #burger{padding:6px 11px}
+  #viewSeg{flex:1}
+  #viewSeg button{flex:1; padding:9px 4px; font-size:14.5px}
+  #viewSeg [data-mode="split"]{display:none}    /* two panes, one narrow screen — no */
+  #moreBtn{margin-left:0}
+  .icon-btn{padding:8px 11px}
+
+  /* one pane, full width — the margin rule moves in with it */
+  #work{flex-direction:column}
+  #editorWrap{border-right:none}
+  #editorWrap{background-position:26px 0}
+  /* line-height stays 32px — the ruled paper is a 32px repeating gradient, and
+     any other value slides the text off its own lines */
+  #editor{font-size:18px; padding:8px 16px 180px 38px}
+  .pane-label{padding:7px 14px 5px 38px; font-size:10.5px}
+  #micBtn{font-size:12.5px; padding:4px 10px}
+  #fmtBar{padding:6px 12px 7px 38px}
+  #fmtBar button{min-height:38px; padding:8px 11px}
+  #preview,.mode-read #preview{padding:14px 18px 110px 22px}
+  #preview h1{font-size:2.2rem} #preview h2{font-size:1.65rem} #preview h3{font-size:1.4rem}
+  #preview h4{font-size:1.22rem} #preview h5{font-size:1.1rem} #preview h6{font-size:1rem}
+  #preview p{font-size:1.05rem}
+  #preview ul,#preview ol{font-size:1.05rem; padding-left:1.9em}
+  #preview ul{padding-left:1.3em}
+  #preview blockquote{padding:.5em .8em}
+  /* wide tables scroll in their own box instead of stretching the page.
+     width:max-content keeps the border hugging the rows — a plain display:block
+     leaves the frame 100% wide with the header shading stopping short of it. */
+  #preview table{display:block; width:max-content; max-width:100%; overflow-x:auto}
+  #status{padding:6px 12px; font-size:11.5px; gap:10px}
+
+  /* modals dock to the bottom edge — that is where the thumb already is */
+  .modal-back{align-items:flex-end; padding:0}
+  .modal{width:100%; max-height:88dvh; padding:20px 16px calc(18px + env(safe-area-inset-bottom))}
+  .modal.sketch,.modal.sketch2{border-radius:24px 24px 0 0; border-bottom:none}
+  .modal h3{font-size:27px}
+  .share-grid{grid-template-columns:repeat(3,1fr); gap:8px}
+  .share-grid button{padding:12px 4px; font-size:12px; gap:5px}
+  .share-grid button .em{font-size:21px}
+
+  /* shared read-only note */
+  #sharedView .barx{padding:calc(10px + env(safe-area-inset-top)) 12px 0}
+  #sharedView .barx .n{font-size:21px}
+  #sharedView .barx .tbtn{padding:7px 11px; font-size:13px}
+  #sharedView .sheet{margin:12px 8px calc(20px + env(safe-area-inset-bottom));
+    padding:20px 16px 34px; border-radius:8px 18px 8px 18px/18px 8px 18px 8px}
 }
 @media(hover:none){#undoBtn,#redoBtn{min-width:44px; min-height:44px}}
+/* touch targets: phones have no Ctrl+Z, so these buttons are the only undo */
+@media(max-width:760px){#undoBtn,#redoBtn{min-width:44px; min-height:44px; font-size:21px}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms !important; transition-duration:.01ms !important}}
 </style>
 
 <div id="app">
@@ -308,6 +411,7 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
     <div id="topbar">
       <button id="burger" onclick="toggleSidebar()">☰</button>
       <input id="fileTitle" class="file-title" placeholder="Untitled" oninput="renameActive(this.value)" spellcheck="false">
+      <div class="tb-break"></div>
       <div class="seg" id="viewSeg">
         <button data-mode="split" onclick="setMode('split')">Split</button>
         <button data-mode="write" onclick="setMode('write')">Write</button>
@@ -315,12 +419,13 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
       </div>
       <button class="icon-btn" id="undoBtn" onclick="undoEdit()" title="Undo" aria-label="Undo" disabled>↶</button>
       <button class="icon-btn" id="redoBtn" onclick="redoEdit()" title="Redo" aria-label="Redo" disabled>↷</button>
-      <button class="tbtn" onclick="toggleFont()" id="fontBtn">✍️ Handwritten</button>
-      <button class="icon-btn" onclick="toggleTheme()" id="themeBtn" title="Theme">🌙</button>
-      <button class="icon-btn" onclick="pickDiagramImage()" title="Screenshot → hand-drawn diagram (AI)">🪄</button>
-      <button class="icon-btn" onclick="openData()" title="Backup / restore">💾</button>
-      <button class="tbtn" id="authBtn" onclick="openAuth()" title="Sign in to sync across devices">☁️ Sign in</button>
-      <button class="tbtn" onclick="openShare()">📤 Share</button>
+      <button class="tbtn secondary" onclick="toggleFont()" id="fontBtn">✍️ Handwritten</button>
+      <button class="icon-btn secondary" onclick="toggleTheme()" id="themeBtn" title="Theme">🌙</button>
+      <button class="icon-btn secondary" onclick="pickDiagramImage()" title="Screenshot → hand-drawn diagram (AI)">🪄</button>
+      <button class="icon-btn secondary" onclick="openData()" title="Backup / restore">💾</button>
+      <button class="tbtn secondary" id="authBtn" onclick="openAuth()" title="Sign in to sync across devices">☁️ Sign in</button>
+      <button class="tbtn secondary" onclick="openShare()">📤 Share</button>
+      <button class="icon-btn" id="moreBtn" onclick="openMore()" title="More" aria-label="More actions">⋯</button>
     </div>
     <div id="work" class="mode-split">
       <div id="editorWrap">
@@ -403,6 +508,16 @@ button{font-family:inherit; cursor:pointer; color:inherit; -webkit-tap-highlight
     <div class="sub" style="margin-top:14px">Tip: <b>☁️ Sign in</b> (top bar) syncs your notes to every device automatically — this backup is for keeping an offline copy or moving between accounts.</div>
     <button class="close" onclick="closeModal('dataModal')">Done</button>
     <input type="file" id="restoreInput" accept="application/json,.json" style="display:none" onchange="restoreData(this.files[0])">
+  </div>
+</div>
+
+<!-- Overflow actions — the top bar's secondary buttons on small screens -->
+<div class="modal-back" id="moreModal" onclick="if(event.target===this)closeModal('moreModal')">
+  <div class="modal sketch2">
+    <h3>More</h3>
+    <div class="sub">Everything the top bar can't fit on a small screen.</div>
+    <div class="rowbtns more-list" id="moreList"></div>
+    <button class="close" onclick="closeModal('moreModal')">Done</button>
   </div>
 </div>
 
@@ -766,7 +881,7 @@ function openFile(id){
   state.active=id;$('#fileTitle').value=f.node.name;$('#editor').value=f.node.content||'';
   histSeed(id,f.node.content||'');histPrune(id);updateUndoUI();
   updatePreview();save();renderTree();
-  if(window.innerWidth<=760)toggleSidebar(false);
+  if(MQ_DRAWER.matches)toggleSidebar(false);
 }
 function clearEditor(){$('#editor').value='';$('#fileTitle').value='';$('#preview').innerHTML='<div class="doc-empty">Pick a file or create one to start writing ✎</div>';$('#counts').textContent='0 words · 0 chars';}
 
@@ -1286,13 +1401,51 @@ async function imageToDiagram(file){
 }
 
 /* ---------- top bar ---------- */
-function setMode(m){state.mode=m;$('#work').className='mode-'+m;$('#viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));if(state.active)updatePreview();save();}
+/* breakpoints live in one place so CSS and JS can never disagree about what
+   counts as a phone (see the RESPONSIVE block in the stylesheet) */
+const MQ_PHONE=window.matchMedia('(max-width:760px)');
+const MQ_DRAWER=window.matchMedia('(max-width:900px)');
+/* state.mode keeps what the user picked; applyMode() decides what a screen this
+   size can actually show. A phone gets Write instead of Split, and the desktop
+   preference survives the trip. */
+function effectiveMode(){const m=state.mode||'split';return (m==='split'&&MQ_PHONE.matches)?'write':m;}
+function applyMode(){
+  const m=effectiveMode();
+  $('#work').className='mode-'+m;
+  $('#viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  if(state.active)updatePreview();
+}
+function setMode(m){state.mode=m;applyMode();save();}
 function toggleTheme(){state.theme=state.theme==='notebook'?'blackboard':'notebook';applyTheme();save();}
 function applyTheme(){document.documentElement.setAttribute('data-theme',state.theme);$('#themeBtn').textContent=state.theme==='blackboard'?'📔':'🌙';}
 function toggleFont(){state.font=state.font==='hand'?'clean':'hand';applyFont();save();}
 function applyFont(){document.documentElement.setAttribute('data-font',state.font);$('#fontBtn').textContent=state.font==='hand'?'✍️ Handwritten':'🖊️ Print';}
 function toggleSidebar(force){const sb=$('#sidebar'),sc=$('#scrim');const open=force===undefined?!sb.classList.contains('open'):force;sb.classList.toggle('open',open);if(sc)sc.classList.toggle('on',open);}
 function closeModal(id){$('#'+id).classList.remove('on');}
+
+/* ---------- ⋯ overflow sheet ----------
+   The bar can't hold ten controls on a phone, so the secondary ones move here.
+   Built fresh on open so every label shows the live setting. */
+function openMore(){renderMoreMenu();$('#moreModal').classList.add('on');}
+/* toggles stay open so you can see what changed; everything else hands off */
+function moreTap(fn,stay){if(stay){window[fn]();renderMoreMenu();}else{closeModal('moreModal');window[fn]();}}
+function renderMoreMenu(){
+  const box=$('#moreList');if(!box)return;
+  const acct=sbSession
+    ? 'Signed in as '+escapeHtml(sbSession.user.email||'your account')
+    : 'Sync your notes to every device';
+  const items=[
+    ['📤','Share this note','WhatsApp, a link, PDF or plain text','openShare',0],
+    ['☁️',sbSession?'Your account':'Sign in',acct,'openAuth',0],
+    [state.font==='hand'?'✍️':'🖊️','Font: '+(state.font==='hand'?'Handwritten':'Print'),'Tap to switch','toggleFont',1],
+    [state.theme==='blackboard'?'📔':'🌙','Theme: '+(state.theme==='blackboard'?'Blackboard':'Notebook'),'Tap to switch','toggleTheme',1],
+    ['🪄','Screenshot → diagram','Turn a photo of a flow into a sketch','pickDiagramImage',0],
+    ['💾','Backup & restore','Save a copy, or bring your notes back','openData',0]
+  ];
+  box.innerHTML=items.map(i=>
+    '<button onclick="moreTap(\''+i[3]+'\','+i[4]+')"><span class="mi-em">'+i[0]+'</span>'+
+    '<span class="mi-t">'+i[1]+'<small>'+i[2]+'</small></span></button>').join('');
+}
 
 /* ======================= SHARE ======================= */
 function currentFile(){return state.active?find(state.active).node:null;}
@@ -1386,7 +1539,10 @@ function buildExportHTML(name,content){
     '<title>'+escapeHtml(name)+'</title>'+
     '<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Kalam:wght@300;400;700&family=Patrick+Hand&family=Gochi+Hand&display=swap" rel="stylesheet">'+
     '<style>'+css+'body{background:var(--desk);background-image:radial-gradient(var(--faint) 1.1px,transparent 1.1px);background-size:24px 24px;font-family:var(--font-hand)}'+
-    '.sheet{max-width:840px;margin:26px auto;background:var(--paper);border:2.5px solid var(--ink);border-radius:8px 20px 8px 20px/20px 8px 20px 8px;box-shadow:var(--shadow);padding:34px 44px 60px}'+
+    /* #preview.sheet, not .sheet — the copied stylesheet styles #preview by id,
+       so a class here would lose and the note would keep the editor's gutter */
+    '#preview.sheet{max-width:840px;margin:26px auto;background:var(--paper);border:2.5px solid var(--ink);border-radius:8px 20px 8px 20px/20px 8px 20px 8px;box-shadow:var(--shadow);padding:34px 44px 60px}'+
+    '@media(max-width:760px){#preview.sheet{margin:10px 8px 24px;padding:20px 16px 34px}}'+
     '.credit{max-width:840px;margin:0 auto 30px;padding:0 8px;font-family:var(--font-clean);font-size:12px;color:var(--muted);text-align:center}</style></head>'+
     '<body data-theme="'+state.theme+'" data-font="'+state.font+'"><div id="preview" class="sheet">'+body+'</div>'+
     '<div class="credit">✎ Made with Scribbly — this file keeps its formatting anywhere you open it.</div></body></html>';
@@ -1745,6 +1901,7 @@ function updateAuthUI(){
   }
   setSyncState(sbSession?'synced':'');
   if($('#authModal').classList.contains('on'))renderAuthModal();
+  if($('#moreModal').classList.contains('on'))renderMoreMenu();
 }
 function renderAuthModal(){
   const box=$('#authBody');if(!box)return;
@@ -1894,6 +2051,16 @@ function boot(){
     state.tree=seed();walk(state.tree,n=>{if(n.type==='folder'&&n.id!=='root')state.expanded[n.id]=true;});
   }
   applyTheme();applyFont();setMode(state.mode||'split');renderTree();
+  // rotating a phone or resizing a window re-decides what the screen can show.
+  // resize is the one signal every browser fires here — matchMedia 'change' is
+  // the cheaper hint, not the guarantee, so both feed the same handler.
+  let breakT=null;
+  const onBreak=()=>{applyMode();if(!MQ_DRAWER.matches)toggleSidebar(false);};
+  const queueBreak=()=>{clearTimeout(breakT);breakT=setTimeout(onBreak,120);};
+  MQ_PHONE.addEventListener('change',onBreak);
+  MQ_DRAWER.addEventListener('change',onBreak);
+  window.addEventListener('resize',queueBreak);
+  window.addEventListener('orientationchange',queueBreak);
   const start=(state.active&&find(state.active))?state.active:(firstFile()?firstFile().id:null);
   start?openFile(start):clearEditor();
   $('#editor').addEventListener('input',onEdit);
@@ -1913,7 +2080,8 @@ function boot(){
   window.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
       if(recording){stopMic();toast('Stopped ✓');return;}
-      closeModal('shareModal');closeModal('dataModal');closeModal('authModal');return;
+      closeModal('shareModal');closeModal('dataModal');closeModal('authModal');closeModal('moreModal');
+      toggleSidebar(false);return;
     }
     const mod=e.metaKey||e.ctrlKey;                    // ⌘ on Mac, Ctrl on Windows/Linux
     if(!mod||e.altKey)return;
